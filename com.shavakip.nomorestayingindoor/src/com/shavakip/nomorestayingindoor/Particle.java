@@ -28,7 +28,7 @@ public class Particle {
         Graphics2D g2d = (Graphics2D) g;
         Composite old = g2d.getComposite();
         g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha));
-        int scale = 4;
+        int scale = 1;
         g2d.drawImage(frame, x, y, 16 * scale, 16 * scale, null);
         g2d.setComposite(old);
     }

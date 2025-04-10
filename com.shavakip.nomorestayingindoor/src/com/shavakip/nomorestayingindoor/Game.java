@@ -7,54 +7,66 @@ import java.awt.event.KeyListener;
 import java.awt.image.BufferStrategy;
 import java.awt.image.BufferedImage;
 
-public class Game extends Canvas implements Runnable, KeyListener  {
+public class Game implements Runnable, KeyListener {
 
-    /**
-	 * 
-	 */
-	private static final long serialVersionUID = 1L;
-	private JFrame frame;
+    private JFrame frame;
     private boolean running = false;
-    public static final int WIDTH = 320;
+    public static final int WIDTH = 320;   // not used for rendering here but for title info etc.
     public static final int HEIGHT = 240;
     public static final String TITLE = "No More Staying Indoors";
-    
+
+    private Canvas canvas;
     private Player player;
-    
+
     private boolean upPressed, downPressed, leftPressed, rightPressed;
-    
+
     private BufferedImage image;
-    private final int INTERNAL_WIDTH = 960;
-    private final int INTERNAL_HEIGHT = 540;
-    private final int SCALE = 3; // Or use full screen scale ratio
+    // Internal resolution: 300 width, and height computed as 300/16*9 (which is 162 in integer math)
+    private final int INTERNAL_WIDTH = 300;
+    private final int INTERNAL_HEIGHT = INTERNAL_WIDTH / 16 * 9; 
+    private boolean fullscreen = true;
+    private GraphicsDevice graphicsDevice;
+
+    private volatile boolean safeToRender = true;
 
     public Game() {
- 
-    	image = new BufferedImage(INTERNAL_WIDTH, INTERNAL_HEIGHT, BufferedImage.TYPE_INT_RGB);
-        // Get screen dimensions
-        GraphicsDevice gd = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
-        DisplayMode displayMode = gd.getDisplayMode();
-        int screenWidth = displayMode.getWidth();
-        int screenHeight = displayMode.getHeight();
-        
-        
-        setPreferredSize(new Dimension(screenWidth, screenHeight));
+        // Create the internal image (game buffer).
+        image = new BufferedImage(INTERNAL_WIDTH, INTERNAL_HEIGHT, BufferedImage.TYPE_INT_RGB);
+
+        // Get system graphics device (for fullscreen mode) and screen size.
+        graphicsDevice = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
+        Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
+
+        // Create canvas.
+        // Initially, we set its preferred size to our internal resolution. 
+        // In fullscreen mode we will override that.
+        canvas = new Canvas() {
+            @Override
+            public Dimension getPreferredSize() {
+                return getSize();
+            }
+        };
+        canvas.setFocusable(true);
+        canvas.setIgnoreRepaint(true);
+
         frame = new JFrame(TITLE);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setUndecorated(true); // Removes window borders
-        frame.setResizable(false);
-        frame.add(this);
+        frame.setUndecorated(true); // no window borders
+        frame.setResizable(true);
+
+        frame.add(canvas);
+        // Initially pack, though setFullscreen() will adjust things.
         frame.pack();
         frame.setLocationRelativeTo(null);
-        
-        gd.setFullScreenWindow(frame);
-        
+
+        // Set fullscreen (or windowed) mode.
+        setFullscreen(fullscreen);
+
         frame.setVisible(true);
 
-        
-        player = new Player(100, 100); // starting position
-        
-        addKeyListener(this);
+        player = new Player(100, 100); // starting position (make sure you have a Player class)
+
+        canvas.addKeyListener(this);
     }
 
     public synchronized void start() {
@@ -66,10 +78,52 @@ public class Game extends Canvas implements Runnable, KeyListener  {
         running = false;
     }
 
+    /**
+     * Adjusts the frame and canvas for fullscreen or windowed mode.
+     * In fullscreen mode, we force the canvas to fill the entire screen.
+     * In windowed mode, we use a scaling factor.
+     */
+    private void setFullscreen(boolean enable) {
+        safeToRender = false;
+        fullscreen = enable;
+
+        // Dispose frame before changes
+        frame.dispose();
+
+        // Remove current Canvas from frame (important!)
+        frame.remove(canvas);
+
+        // Toggle undecorated mode
+        frame.setUndecorated(fullscreen);
+
+        // Set fullscreen mode or windowed mode
+        if (fullscreen) {
+        	Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
+        	frame.setSize(screenSize.width, screenSize.height);
+        	frame.setLocation(0, 0);
+        } else {
+        	frame.setSize(INTERNAL_WIDTH * 4, INTERNAL_HEIGHT * 4);
+            frame.setLocationRelativeTo(null);
+        }
+
+        // Add a fresh Canvas (this)
+        frame.add(canvas);
+        frame.setVisible(true);
+
+        // Delay and setup
+        SwingUtilities.invokeLater(() -> {
+        	canvas.createBufferStrategy(3);
+        	canvas.requestFocusInWindow(); // Ensures key input still works
+            safeToRender = true;
+        });
+    }
+
+
+    @Override
     public void run() {
-        requestFocus();
+        canvas.requestFocusInWindow();
         long lastTime = System.nanoTime();
-        double nsPerTick = 1000000000.0 / 60.0;
+        double nsPerTick = 1_000_000_000.0 / 60.0; // 60 ticks per second
         double delta = 0;
 
         int frames = 0;
@@ -82,31 +136,28 @@ public class Game extends Canvas implements Runnable, KeyListener  {
             lastTime = now;
 
             while (delta >= 1) {
-        	  double deltaTime = nsPerTick / 1_000_000_000.0; // delta time per tick (in seconds)
-    	    	tick(deltaTime); // ✅ new
-        	    updates++;
-        	    delta--;
+                double deltaTime = nsPerTick / 1_000_000_000.0;
+                tick(deltaTime);
+                updates++;
+                delta--;
             }
 
             render();
             frames++;
 
-            // Print updates and FPS every second
             if (System.currentTimeMillis() - timer >= 1000) {
                 timer += 1000;
                 System.out.println("FPS: " + frames + " | Updates: " + updates);
                 frames = 0;
                 updates = 0;
             }
-            
-            // Add a small sleep to reduce CPU usage and cap FPS
+
             try {
-                Thread.sleep(2); 
+                Thread.sleep(2);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
         }
-
         stop();
     }
 
@@ -114,88 +165,115 @@ public class Game extends Canvas implements Runnable, KeyListener  {
         player.update(deltaTime);
     }
 
+    /**
+     * Render method:
+     * 1. Renders the complete game world into the internal image (300×162).
+     * 2. Crops a square region from the internal image using the full height (i.e. 162×162).
+     * 3. Scales the cropped square so that its height exactly matches the canvas height.
+     * 4. Draws the scaled square centered horizontally so that black bars appear on the left and right.
+     */
     public void render() {
-        BufferStrategy bs = getBufferStrategy();
+        if (!safeToRender) return;
+
+        BufferStrategy bs = canvas.getBufferStrategy();
         if (bs == null) {
-            createBufferStrategy(3);
+            canvas.createBufferStrategy(3);
             return;
         }
 
-        // Render to the off-screen internal resolution
+        // 1. Render the game world into the internal buffer.
         Graphics2D g = image.createGraphics();
-        g.setColor(Color.BLACK);
+        g.setColor(Color.PINK);
         g.fillRect(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT);
         player.render(g);
         g.dispose();
 
-        // Get actual screen size from the display mode
-        GraphicsDevice gd = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
-        DisplayMode dm = gd.getDisplayMode();
-        int screenW = dm.getWidth();
-        int screenH = dm.getHeight();
+        // 2. Get the canvas (screen) dimensions.
+        int screenW = canvas.getWidth();
+        int screenH = canvas.getHeight();
 
-        // Maintain aspect ratio
-        double scaleX = screenW / (double) INTERNAL_WIDTH;
-        double scaleY = screenH / (double) INTERNAL_HEIGHT;
-        double scale = Math.min(scaleX, scaleY);
-        int finalW = (int)(INTERNAL_WIDTH * scale);
-        int finalH = (int)(INTERNAL_HEIGHT * scale);
-        int xOffset = (screenW - finalW) / 2;
-        int yOffset = (screenH - finalH) / 2;
+        // 3. Crop a square from the internal image using the full internal height.
+        // Your internal image is INTERNAL_WIDTH x INTERNAL_HEIGHT, where INTERNAL_HEIGHT is less than INTERNAL_WIDTH.
+        // We'll use the entire internal height as the square's side.
+        int squareSize = INTERNAL_HEIGHT;   // For example, if INTERNAL_HEIGHT is 162.
+        int imageX = (INTERNAL_WIDTH - squareSize) / 2; // Center the crop horizontally.
+        int imageY = 0;
 
-        // Now draw the scaled image to screen
-        Graphics gFinal = bs.getDrawGraphics();
+        // 4. Calculate the scaling factor so that the square's height equals the canvas height.
+        // Use the exact scale (do not floor it) so the square fills the full vertical space.
+        double scale = screenH / (double) squareSize;
+        int finalSize = (int) Math.round(squareSize * scale);  // Ideally, this equals screenH.
+
+        // 5. Center the resulting square horizontally, leaving letterboxes on the left and right.
+        int xOffset = (screenW - finalSize) / 2;
+        int yOffset = 0;  // Flush to the top, so the square has full height.
+
+        // 6. Clear the screen (fill with black) and draw the scaled square.
+        Graphics2D gFinal = (Graphics2D) bs.getDrawGraphics();
+        gFinal.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
+        gFinal.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_SPEED);
+        gFinal.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
+
         gFinal.setColor(Color.BLACK);
-        gFinal.fillRect(0, 0, screenW, screenH); // Clear background
-        gFinal.drawImage(image, xOffset, yOffset, finalW, finalH, null);
+        gFinal.fillRect(0, 0, screenW, screenH); // Clear the screen with black.
+
+        gFinal.drawImage(image,
+                xOffset, yOffset, xOffset + finalSize, yOffset + finalSize, // Destination rectangle (square fills full height)
+                imageX, imageY, imageX + squareSize, imageY + squareSize,   // Source rectangle (the square crop)
+                null);
+
         gFinal.dispose();
         bs.show();
     }
-    
-    
+
     public static void main(String[] args) {
         Game game = new Game();
         game.start();
     }
-    
-    private void updatePlayerVelocity() {
-        int vx = 0;
-        int vy = 0;
 
+    private void updatePlayerVelocity() {
+        int vx = 0, vy = 0;
         if (upPressed) vy -= 2;
         if (downPressed) vy += 2;
         if (leftPressed) vx -= 2;
         if (rightPressed) vx += 2;
-
         player.setVelocity(vx, vy);
     }
 
     @Override
     public void keyPressed(KeyEvent e) {
         int key = e.getKeyCode();
-
-        if (key == KeyEvent.VK_W || key == KeyEvent.VK_UP) upPressed = true;
-        if (key == KeyEvent.VK_S || key == KeyEvent.VK_DOWN) downPressed = true;
-        if (key == KeyEvent.VK_A || key == KeyEvent.VK_LEFT) leftPressed = true;
-        if (key == KeyEvent.VK_D || key == KeyEvent.VK_RIGHT) rightPressed = true;
-
+        if (key == KeyEvent.VK_W || key == KeyEvent.VK_UP)
+            upPressed = true;
+        if (key == KeyEvent.VK_S || key == KeyEvent.VK_DOWN)
+            downPressed = true;
+        if (key == KeyEvent.VK_A || key == KeyEvent.VK_LEFT)
+            leftPressed = true;
+        if (key == KeyEvent.VK_D || key == KeyEvent.VK_RIGHT)
+            rightPressed = true;
+        if (key == KeyEvent.VK_F11)
+            setFullscreen(!fullscreen);
+        if (key == KeyEvent.VK_ESCAPE)
+            System.exit(0);
         updatePlayerVelocity();
     }
 
     @Override
     public void keyReleased(KeyEvent e) {
         int key = e.getKeyCode();
-
-        if (key == KeyEvent.VK_W || key == KeyEvent.VK_UP) upPressed = false;
-        if (key == KeyEvent.VK_S || key == KeyEvent.VK_DOWN) downPressed = false;
-        if (key == KeyEvent.VK_A || key == KeyEvent.VK_LEFT) leftPressed = false;
-        if (key == KeyEvent.VK_D || key == KeyEvent.VK_RIGHT) rightPressed = false;
-
+        if (key == KeyEvent.VK_W || key == KeyEvent.VK_UP)
+            upPressed = false;
+        if (key == KeyEvent.VK_S || key == KeyEvent.VK_DOWN)
+            downPressed = false;
+        if (key == KeyEvent.VK_A || key == KeyEvent.VK_LEFT)
+            leftPressed = false;
+        if (key == KeyEvent.VK_D || key == KeyEvent.VK_RIGHT)
+            rightPressed = false;
         updatePlayerVelocity();
     }
 
     @Override
     public void keyTyped(KeyEvent e) {
-        // Not used
+        // Not used.
     }
 }

@@ -26,7 +26,7 @@ public class Player {
     private long lastParticleTime = 0;
     private int particleDelay = 120; // ms between particles — increase to reduce frequency
     
-    private final float speed = 100f; // pixels per second
+    private final float speed = 30f; // pixels per second
     
     
 
@@ -52,7 +52,7 @@ public class Player {
     	for (Particle p : particles) {
     	    p.render(g);
     	}
-        int scale = 4;
+        int scale = 1;
         g.drawImage(ghostFrames[currentFrame], (int)x, (int)y, 16 * scale, 16 * scale, null);
     }
     public void setVelocity(float vx, float vy) {
