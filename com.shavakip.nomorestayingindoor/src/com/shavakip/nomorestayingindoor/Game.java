@@ -53,7 +53,7 @@ public class Game implements Runnable, KeyListener {
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setUndecorated(true); // no window borders
         frame.setResizable(true);
-        // test
+        // testasd
 
         frame.add(canvas);
         // Initially pack, though setFullscreen() will adjust things.
