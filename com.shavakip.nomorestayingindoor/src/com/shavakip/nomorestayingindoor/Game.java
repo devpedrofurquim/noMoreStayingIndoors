@@ -4,6 +4,7 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
+import java.awt.geom.AffineTransform;
 import java.awt.image.BufferStrategy;
 import java.awt.image.BufferedImage;
 
@@ -26,6 +27,8 @@ public class Game implements Runnable, KeyListener {
     private final int INTERNAL_HEIGHT = INTERNAL_WIDTH / 16 * 9; 
     private boolean fullscreen = true;
     private GraphicsDevice graphicsDevice;
+    
+    private Camera camera;
 
     private volatile boolean safeToRender = true;
 
@@ -65,7 +68,10 @@ public class Game implements Runnable, KeyListener {
 
         frame.setVisible(true);
 
-        player = new Player(100, 100); // starting position (make sure you have a Player class)
+        player = new Player(new Position(100.0f, 100.0f));
+        
+        camera = new Camera(new Size(INTERNAL_WIDTH, INTERNAL_HEIGHT));
+        camera.focusOn(player);
 
         canvas.addKeyListener(this);
     }
@@ -164,6 +170,7 @@ public class Game implements Runnable, KeyListener {
 
     public void tick(double deltaTime) {
         player.update(deltaTime);
+        camera.update();
     }
 
     /**
@@ -186,46 +193,66 @@ public class Game implements Runnable, KeyListener {
         Graphics2D g = image.createGraphics();
         g.setColor(Color.PINK);
         g.fillRect(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT);
+
+        // 2. Translate the graphics context to simulate camera movement
+        Position camPos = camera.getPosition();
+        g.translate(-camPos.getX(), -camPos.getY());
+
+        // Draw grid lines
+        int gridSize = 16;
+        g.setColor(new Color(255, 255, 255, 40));
+        int startX = (int) (camPos.getX() - (camPos.getX() % gridSize)) - gridSize;
+        int endX = (int) (camPos.getX() + INTERNAL_WIDTH) + gridSize;
+        int startY = (int) (camPos.getY() - (camPos.getY() % gridSize)) - gridSize;
+        int endY = (int) (camPos.getY() + INTERNAL_HEIGHT) + gridSize;
+
+        for (int x = startX; x <= endX; x += gridSize) {
+            g.drawLine(x, startY, x, endY);
+        }
+        for (int y = startY; y <= endY; y += gridSize) {
+            g.drawLine(startX, y, endX, y);
+        }
+
+        // Render player
         player.render(g);
+
+        // Reset translation (optional, safety)
+        g.translate(camPos.getX(), camPos.getY());
+
         g.dispose();
 
-        // 2. Get the canvas (screen) dimensions.
+        // 3. Scale image for fullscreen output
         int screenW = canvas.getWidth();
         int screenH = canvas.getHeight();
 
-        // 3. Crop a square from the internal image using the full internal height.
-        // Your internal image is INTERNAL_WIDTH x INTERNAL_HEIGHT, where INTERNAL_HEIGHT is less than INTERNAL_WIDTH.
-        // We'll use the entire internal height as the square's side.
-        int squareSize = INTERNAL_HEIGHT;   // For example, if INTERNAL_HEIGHT is 162.
-        int imageX = (INTERNAL_WIDTH - squareSize) / 2; // Center the crop horizontally.
+        int squareSize = INTERNAL_HEIGHT;
+        int imageX = (INTERNAL_WIDTH - squareSize) / 2;
         int imageY = 0;
 
-        // 4. Calculate the scaling factor so that the square's height equals the canvas height.
-        // Use the exact scale (do not floor it) so the square fills the full vertical space.
         double scale = screenH / (double) squareSize;
-        int finalSize = (int) Math.round(squareSize * scale);  // Ideally, this equals screenH.
+        int finalSize = (int) Math.round(squareSize * scale);
 
-        // 5. Center the resulting square horizontally, leaving letterboxes on the left and right.
         int xOffset = (screenW - finalSize) / 2;
-        int yOffset = 0;  // Flush to the top, so the square has full height.
+        int yOffset = 0;
 
-        // 6. Clear the screen (fill with black) and draw the scaled square.
         Graphics2D gFinal = (Graphics2D) bs.getDrawGraphics();
         gFinal.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
         gFinal.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_SPEED);
         gFinal.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
 
         gFinal.setColor(Color.BLACK);
-        gFinal.fillRect(0, 0, screenW, screenH); // Clear the screen with black.
+        gFinal.fillRect(0, 0, screenW, screenH);
 
         gFinal.drawImage(image,
-                xOffset, yOffset, xOffset + finalSize, yOffset + finalSize, // Destination rectangle (square fills full height)
-                imageX, imageY, imageX + squareSize, imageY + squareSize,   // Source rectangle (the square crop)
+                xOffset, yOffset, xOffset + finalSize, yOffset + finalSize,
+                imageX, imageY, imageX + squareSize, imageY + squareSize,
                 null);
 
         gFinal.dispose();
         bs.show();
     }
+
+
 
     public static void main(String[] args) {
         Game game = new Game();

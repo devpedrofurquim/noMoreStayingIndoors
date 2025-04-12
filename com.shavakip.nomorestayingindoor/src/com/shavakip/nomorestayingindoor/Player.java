@@ -8,8 +8,7 @@ import javax.imageio.ImageIO;
 import java.util.ArrayList;
 import java.util.Iterator;
 
-public class Player {
-    private float x, y;
+public class Player extends GameObject {
     private float velocityX = 0;
     private float velocityY = 0;
 
@@ -28,9 +27,8 @@ public class Player {
 
     private Direction currentDirection = Direction.IDLE;
 
-    public Player(float x, float y) {
-        this.x = x;
-        this.y = y;
+    public Player(Position startPosition) {
+		super(startPosition); // Calls GameObject's constructor
 
         try {
             BufferedImage tileset = ImageIO.read(new File("res/tileset.png"));
@@ -57,7 +55,7 @@ public class Player {
         }
 
         BufferedImage[] anim = animations[currentDirection.ordinal()];
-        g.drawImage(anim[currentFrame], (int) x, (int) y, 16, 16, null);
+        g.drawImage(anim[currentFrame], (int) position.x, (int) position.y, 16, 16, null);
     }
 
     public void setVelocity(float vx, float vy) {
@@ -82,7 +80,7 @@ public class Player {
             lastFrameTime = now;
 
             if (isMoving()) {
-                particles.add(new Particle((int) x, (int) y, anim[currentFrame]));
+                particles.add(new Particle((int) position.x, (int) position.y, anim[currentFrame]));
             }
         }
 
@@ -93,8 +91,8 @@ public class Player {
             if (p.isDead()) iter.remove();
         }
 
-        x += velocityX * deltaTime;
-        y += velocityY * deltaTime;
+        position.x += velocityX * deltaTime;
+        position.y += velocityY * deltaTime;
     }
 
     private boolean isMoving() {
