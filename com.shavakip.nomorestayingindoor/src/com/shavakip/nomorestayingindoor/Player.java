@@ -19,7 +19,7 @@ public class Player extends GameObject {
     private long lastFrameTime;
     private int frameDelay = 150;
 
-    private final float speed = 50;
+    private final float speed = 30;
 
     private enum Direction {
         IDLE, DOWN, RIGHT, LEFT, UP
