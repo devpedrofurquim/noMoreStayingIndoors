@@ -18,6 +18,8 @@ public class Game implements Runnable, KeyListener {
 
     private Canvas canvas;
     private Player player;
+    private MapBounds forestBounds;
+
 
     private boolean upPressed, downPressed, leftPressed, rightPressed;
 
@@ -70,7 +72,10 @@ public class Game implements Runnable, KeyListener {
 
         player = new Player(new Position(100.0f, 100.0f));
         
-        camera = new Camera(new Size(INTERNAL_WIDTH, INTERNAL_HEIGHT));
+        // Create forest bounds (for example, a 800x600 area)
+        forestBounds = new MapBounds(0, 0, 512, 512);
+        
+        camera = new Camera(new Size(INTERNAL_WIDTH, INTERNAL_HEIGHT), forestBounds);
         camera.focusOn(player);
 
         canvas.addKeyListener(this);
@@ -169,7 +174,21 @@ public class Game implements Runnable, KeyListener {
     }
 
     public void tick(double deltaTime) {
+        updatePlayerVelocity(); // ← update velocity every tick
+
+        // 1. Move player
         player.update(deltaTime);
+
+        // 2. Clamp position AFTER movement, accounting for player size (16x16)
+        Position playerPos = player.getPosition();
+        float clampedX = Math.max(forestBounds.getMinX(), Math.min(forestBounds.getMaxX() - 16, playerPos.getX()));
+        float clampedY = Math.max(forestBounds.getMinY(), Math.min(forestBounds.getMaxY() - 16, playerPos.getY()));
+        player.setPosition(new Position(clampedX, clampedY));
+        
+        System.out.printf("Player: (%.1f, %.1f)%n", player.getPosition().x, player.getPosition().y);
+
+
+        // 3. Update camera
         camera.update();
     }
 
@@ -201,14 +220,16 @@ public class Game implements Runnable, KeyListener {
         // Draw grid lines
         int gridSize = 16;
         g.setColor(new Color(255, 255, 255, 40));
-        int startX = (int) (camPos.getX() - (camPos.getX() % gridSize)) - gridSize;
-        int endX = (int) (camPos.getX() + INTERNAL_WIDTH) + gridSize;
-        int startY = (int) (camPos.getY() - (camPos.getY() % gridSize)) - gridSize;
-        int endY = (int) (camPos.getY() + INTERNAL_HEIGHT) + gridSize;
+
+        int startX = (int) (Math.max(camPos.getX(), forestBounds.getMinX()) - (camPos.getX() % gridSize)) - gridSize;
+        int endX = (int) (Math.min(camPos.getX() + INTERNAL_WIDTH, forestBounds.getMaxX())) + gridSize;
+        int startY = (int) (Math.max(camPos.getY(), forestBounds.getMinY()) - (camPos.getY() % gridSize)) - gridSize;
+        int endY = (int) (Math.min(camPos.getY() + INTERNAL_HEIGHT, forestBounds.getMaxY())) + gridSize;
 
         for (int x = startX; x <= endX; x += gridSize) {
             g.drawLine(x, startY, x, endY);
         }
+
         for (int y = startY; y <= endY; y += gridSize) {
             g.drawLine(startX, y, endX, y);
         }
@@ -216,24 +237,26 @@ public class Game implements Runnable, KeyListener {
         // Render player
         player.render(g);
 
-        // Reset translation (optional, safety)
+        // Reset translation (optional)
         g.translate(camPos.getX(), camPos.getY());
-
         g.dispose();
 
-        // 3. Scale image for fullscreen output
+        // 3. Scale image for fullscreen output using full width & height
         int screenW = canvas.getWidth();
         int screenH = canvas.getHeight();
 
-        int squareSize = INTERNAL_HEIGHT;
-        int imageX = (INTERNAL_WIDTH - squareSize) / 2;
-        int imageY = 0;
+        int imageW = INTERNAL_WIDTH;
+        int imageH = INTERNAL_HEIGHT;
 
-        double scale = screenH / (double) squareSize;
-        int finalSize = (int) Math.round(squareSize * scale);
+        double scaleX = screenW / (double) imageW;
+        double scaleY = screenH / (double) imageH;
+        double scale = Math.min(scaleX, scaleY); // keep aspect ratio
 
-        int xOffset = (screenW - finalSize) / 2;
-        int yOffset = 0;
+        int finalW = (int) (imageW * scale);
+        int finalH = (int) (imageH * scale);
+
+        int xOffset = (screenW - finalW) / 2;
+        int yOffset = (screenH - finalH) / 2;
 
         Graphics2D gFinal = (Graphics2D) bs.getDrawGraphics();
         gFinal.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
@@ -244,13 +267,14 @@ public class Game implements Runnable, KeyListener {
         gFinal.fillRect(0, 0, screenW, screenH);
 
         gFinal.drawImage(image,
-                xOffset, yOffset, xOffset + finalSize, yOffset + finalSize,
-                imageX, imageY, imageX + squareSize, imageY + squareSize,
+                xOffset, yOffset, xOffset + finalW, yOffset + finalH,
+                0, 0, imageW, imageH,
                 null);
 
         gFinal.dispose();
         bs.show();
     }
+
 
 
 
