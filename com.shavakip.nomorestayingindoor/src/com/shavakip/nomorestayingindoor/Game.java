@@ -215,6 +215,7 @@ public class Game implements Runnable, KeyListener {
 
         // 2. Translate the graphics context to simulate camera movement
         Position camPos = camera.getPosition();
+        g.scale(camera.getZoom(), camera.getZoom());
         g.translate(-camPos.getX(), -camPos.getY());
 
         // Draw grid lines
@@ -307,6 +308,19 @@ public class Game implements Runnable, KeyListener {
             setFullscreen(!fullscreen);
         if (key == KeyEvent.VK_ESCAPE)
             System.exit(0);
+        if (key == KeyEvent.VK_1) camera.shakeLight();    // subtle bump
+        if (key == KeyEvent.VK_2) camera.shakeDefault();  // normal impact
+        if (key == KeyEvent.VK_3) camera.shakeHard();     // boom
+        if (key == KeyEvent.VK_Z) camera.startZoomInEffect(); // Zoom in over time
+        if (key == KeyEvent.VK_X) camera.startZoomOutEffect(); // smooth zoom out
+
+
+        
+        if (key == KeyEvent.VK_EQUALS || key == KeyEvent.VK_ADD)
+            camera.zoomIn(0.1f);
+
+        if (key == KeyEvent.VK_MINUS || key == KeyEvent.VK_SUBTRACT)
+            camera.zoomOut(0.1f);
         updatePlayerVelocity();
     }
 
