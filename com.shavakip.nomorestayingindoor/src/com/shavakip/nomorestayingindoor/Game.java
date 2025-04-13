@@ -19,7 +19,21 @@ public class Game implements Runnable, KeyListener {
     private Canvas canvas;
     private Player player;
     private MapBounds forestBounds;
-
+    
+    private float fadeAlpha = 0.0f;  // Current alpha value (0.0 = fully transparent, 1.0 = fully opaque)
+    private FadeState fadeState = FadeState.NONE;
+    private long fadeDuration = 1000; // Duration of the fade effect in milliseconds (1000ms = 1 second)
+    private long fadeStartTime = 0;   // The time when the fade effect starts
+    
+    private GameStateManager gameStateManager;
+    
+    private enum FadeState {
+        NONE,
+        FADE_OUT,
+        FADE_IN
+    }
+    
+    private FadeState previousFade = FadeState.NONE;
 
     private boolean upPressed, downPressed, leftPressed, rightPressed;
 
@@ -76,8 +90,11 @@ public class Game implements Runnable, KeyListener {
         forestBounds = new MapBounds(0, 0, 512, 512);
         
         camera = new Camera(new Size(INTERNAL_WIDTH, INTERNAL_HEIGHT), forestBounds);
+                
         camera.focusOn(player);
 
+        gameStateManager = new GameStateManager(); // Start at MAIN_MENU
+        
         canvas.addKeyListener(this);
     }
 
@@ -174,22 +191,35 @@ public class Game implements Runnable, KeyListener {
     }
 
     public void tick(double deltaTime) {
-        updatePlayerVelocity(); // ← update velocity every tick
+        if (fadeState != FadeState.NONE) {
+            long currentTime = System.currentTimeMillis();
+            float fadeProgress = (currentTime - fadeStartTime) / (float) fadeDuration;
 
-        // 1. Move player
-        player.update(deltaTime);
+            if (fadeProgress >= 1.0f) {
+                fadeProgress = 1.0f;
+                previousFade = fadeState;
+                fadeState = FadeState.NONE;
+            }
 
-        // 2. Clamp position AFTER movement, accounting for player size (16x16)
-        Position playerPos = player.getPosition();
-        float clampedX = Math.max(forestBounds.getMinX(), Math.min(forestBounds.getMaxX() - 16, playerPos.getX()));
-        float clampedY = Math.max(forestBounds.getMinY(), Math.min(forestBounds.getMaxY() - 16, playerPos.getY()));
-        player.setPosition(new Position(clampedX, clampedY));
-        
-        System.out.printf("Player: (%.1f, %.1f)%n", player.getPosition().x, player.getPosition().y);
+            if (fadeState == FadeState.FADE_IN) {
+                fadeAlpha = 1.0f - fadeProgress;
+            } else if (fadeState == FadeState.FADE_OUT) {
+                fadeAlpha = fadeProgress;
+            }
+        }
 
+        if (gameStateManager.is(GameState.PLAYING)) {
+            updatePlayerVelocity();
+            player.update(deltaTime);
 
-        // 3. Update camera
-        camera.update();
+            // Clamp player to map bounds
+            Position playerPos = player.getPosition();
+            float clampedX = Math.max(forestBounds.getMinX(), Math.min(forestBounds.getMaxX() - 16, playerPos.getX()));
+            float clampedY = Math.max(forestBounds.getMinY(), Math.min(forestBounds.getMaxY() - 16, playerPos.getY()));
+            player.setPosition(new Position(clampedX, clampedY));
+
+            camera.update();
+        }
     }
 
     /**
@@ -213,36 +243,132 @@ public class Game implements Runnable, KeyListener {
         g.setColor(Color.PINK);
         g.fillRect(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT);
 
-        // 2. Translate the graphics context to simulate camera movement
-        Position camPos = camera.getPosition();
-        g.scale(camera.getZoom(), camera.getZoom());
-        g.translate(-camPos.getX(), -camPos.getY());
+        switch (gameStateManager.getState()) {
+        case MAIN_MENU:
+        	g.setColor(Color.BLACK);
+        	g.fillRect(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT);
 
-        // Draw grid lines
-        int gridSize = 16;
-        g.setColor(new Color(255, 255, 255, 40));
+        	// Colors
+        	g.setColor(Color.WHITE);
 
-        int startX = (int) (Math.max(camPos.getX(), forestBounds.getMinX()) - (camPos.getX() % gridSize)) - gridSize;
-        int endX = (int) (Math.min(camPos.getX() + INTERNAL_WIDTH, forestBounds.getMaxX())) + gridSize;
-        int startY = (int) (Math.max(camPos.getY(), forestBounds.getMinY()) - (camPos.getY() % gridSize)) - gridSize;
-        int endY = (int) (Math.min(camPos.getY() + INTERNAL_HEIGHT, forestBounds.getMaxY())) + gridSize;
+        	// Clamped, tight font sizes
+        	int titleFontSize = Math.max(10, INTERNAL_HEIGHT / 15);
+        	int subFontSize = Math.max(6, INTERNAL_HEIGHT / 32);
+        	int btnFontSize = Math.max(8, INTERNAL_HEIGHT / 28);
 
-        for (int x = startX; x <= endX; x += gridSize) {
-            g.drawLine(x, startY, x, endY);
+        	Font titleFont = new Font("Monospaced", Font.BOLD, titleFontSize);
+        	Font subFont = new Font("Monospaced", Font.PLAIN, subFontSize);
+        	Font btnFont = new Font("Monospaced", Font.BOLD, btnFontSize);
+
+        	// Title
+        	g.setFont(titleFont);
+        	FontMetrics fmTitle = g.getFontMetrics();
+        	String[] titleLines = {"No More", "Staying", "Indoors"};
+        	int titleLineHeight = fmTitle.getHeight();
+
+        	// Subtitle
+        	g.setFont(subFont);
+        	FontMetrics fmSub = g.getFontMetrics();
+        	String subtitle = "by pedro furquim";
+        	String pressEnter = "Press ENTER to Start";
+        	int subtitleHeight = fmSub.getHeight();
+        	int pressEnterHeight = fmSub.getHeight();
+
+        	// Buttons
+        	g.setFont(btnFont);
+        	FontMetrics fmBtn = g.getFontMetrics();
+        	String[] buttons = {"START GAME", "OPTIONS", "EXIT"};
+        	int btnHeight = fmBtn.getHeight() + 2;
+        	int btnWidth = INTERNAL_WIDTH - 60;
+        	int btnSpacing = 2;
+
+        	// Total compact layout height
+        	int totalHeight =
+        	    (titleLineHeight * titleLines.length) +
+        	    subtitleHeight + 2 +
+        	    pressEnterHeight + 2 +
+        	    (buttons.length * (btnHeight + btnSpacing));
+
+        	int startY = (INTERNAL_HEIGHT - totalHeight) / 2;
+
+        	// ----- Title -----
+        	g.setFont(titleFont);
+        	for (String line : titleLines) {
+        	    int w = fmTitle.stringWidth(line);
+        	    g.drawString(line, (INTERNAL_WIDTH - w) / 2, startY);
+        	    startY += titleLineHeight;
+        	}
+        	startY += 2;
+
+        	// ----- Subtitle -----
+        	g.setFont(subFont);
+        	int subW = fmSub.stringWidth(subtitle);
+        	g.drawString(subtitle, (INTERNAL_WIDTH - subW) / 2, startY);
+        	startY += subtitleHeight + 2;
+
+        	// ----- Press ENTER -----
+        	int pressW = fmSub.stringWidth(pressEnter);
+        	g.drawString(pressEnter, (INTERNAL_WIDTH - pressW) / 2, startY);
+        	startY += pressEnterHeight + 2;
+
+        	// ----- Buttons -----
+        	g.setFont(btnFont);
+        	int btnX = (INTERNAL_WIDTH - btnWidth) / 2;
+        	for (String label : buttons) {
+        	    drawMenuButton(g, btnX, startY, btnWidth, btnHeight, label);
+        	    startY += btnHeight + btnSpacing;
+        	}
+            break;
+            case PLAYING:
+                // Translate and scale camera
+                Position camPos = camera.getPosition();
+                g.scale(camera.getZoom(), camera.getZoom());
+                g.translate(-camPos.getX(), -camPos.getY());
+
+                // Draw grid lines
+                int gridSize = 16;
+                g.setColor(new Color(255, 255, 255, 40));
+
+                int startX = (int) (Math.max(camPos.getX(), forestBounds.getMinX()) - (camPos.getX() % gridSize)) - gridSize;
+                int endX = (int) (Math.min(camPos.getX() + INTERNAL_WIDTH, forestBounds.getMaxX())) + gridSize;
+                int startU = (int) (Math.max(camPos.getY(), forestBounds.getMinY()) - (camPos.getY() % gridSize)) - gridSize;
+                int endY = (int) (Math.min(camPos.getY() + INTERNAL_HEIGHT, forestBounds.getMaxY())) + gridSize;
+
+                for (int x = startX; x <= endX; x += gridSize) {
+                    g.drawLine(x, startU, x, endY);
+                }
+
+                for (int y = startU; y <= endY; y += gridSize) {
+                    g.drawLine(startX, y, endX, y);
+                }
+
+                // Render player
+                player.render(g);
+
+                // Reset transform (optional)
+                g.translate(camPos.getX(), camPos.getY());
+                break;
+
+            case PAUSED:
+                g.setColor(Color.DARK_GRAY);
+                g.fillRect(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT);
+                g.setColor(Color.WHITE);
+                g.setFont(new Font("Arial", Font.PLAIN, 12));
+                g.drawString("PAUSED - Press P to Resume", 60, INTERNAL_HEIGHT / 2);
+                break;
+
+            case GAME_OVER:
+                g.setColor(Color.BLACK);
+                g.fillRect(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT);
+                g.setColor(Color.RED);
+                g.setFont(new Font("Arial", Font.BOLD, 14));
+                g.drawString("GAME OVER - Press R to Retry", 50, INTERNAL_HEIGHT / 2);
+                break;
         }
 
-        for (int y = startY; y <= endY; y += gridSize) {
-            g.drawLine(startX, y, endX, y);
-        }
-
-        // Render player
-        player.render(g);
-
-        // Reset translation (optional)
-        g.translate(camPos.getX(), camPos.getY());
         g.dispose();
 
-        // 3. Scale image for fullscreen output using full width & height
+        // 2. Scale image for fullscreen output using full width & height
         int screenW = canvas.getWidth();
         int screenH = canvas.getHeight();
 
@@ -272,10 +398,13 @@ public class Game implements Runnable, KeyListener {
                 0, 0, imageW, imageH,
                 null);
 
+        // Draw fade overlay (if active)
+        gFinal.setColor(new Color(0, 0, 0, fadeAlpha));
+        gFinal.fillRect(0, 0, screenW, screenH);
+
         gFinal.dispose();
         bs.show();
     }
-
 
 
 
@@ -296,32 +425,82 @@ public class Game implements Runnable, KeyListener {
     @Override
     public void keyPressed(KeyEvent e) {
         int key = e.getKeyCode();
-        if (key == KeyEvent.VK_W || key == KeyEvent.VK_UP)
-            upPressed = true;
-        if (key == KeyEvent.VK_S || key == KeyEvent.VK_DOWN)
-            downPressed = true;
-        if (key == KeyEvent.VK_A || key == KeyEvent.VK_LEFT)
-            leftPressed = true;
-        if (key == KeyEvent.VK_D || key == KeyEvent.VK_RIGHT)
-            rightPressed = true;
+        
         if (key == KeyEvent.VK_F11)
             setFullscreen(!fullscreen);
-        if (key == KeyEvent.VK_ESCAPE)
-            System.exit(0);
-        if (key == KeyEvent.VK_1) camera.shakeLight();    // subtle bump
-        if (key == KeyEvent.VK_2) camera.shakeDefault();  // normal impact
-        if (key == KeyEvent.VK_3) camera.shakeHard();     // boom
-        if (key == KeyEvent.VK_Z) camera.startZoomInEffect(); // Zoom in over time
-        if (key == KeyEvent.VK_X) camera.startZoomOutEffect(); // smooth zoom out
 
+        // ===== MAIN MENU =====
+        if (gameStateManager.is(GameState.MAIN_MENU)) {
+            if (key == KeyEvent.VK_ENTER) {
+                gameStateManager.setState(GameState.PLAYING);
+            }
+            if (key == KeyEvent.VK_ESCAPE) {
+                System.exit(0);
+            }
+            return;
+        }
 
-        
-        if (key == KeyEvent.VK_EQUALS || key == KeyEvent.VK_ADD)
-            camera.zoomIn(0.1f);
+        // ===== GAME OVER =====
+        if (gameStateManager.is(GameState.GAME_OVER)) {
+            if (key == KeyEvent.VK_R) {
+                gameStateManager.setState(GameState.MAIN_MENU); // Restart to menu
+            }
+            if (key == KeyEvent.VK_ESCAPE) {
+                System.exit(0);
+            }
+            return;
+        }
 
-        if (key == KeyEvent.VK_MINUS || key == KeyEvent.VK_SUBTRACT)
-            camera.zoomOut(0.1f);
-        updatePlayerVelocity();
+        // ===== PAUSED =====
+        if (gameStateManager.is(GameState.PAUSED)) {
+            if (key == KeyEvent.VK_P) {
+                gameStateManager.setState(GameState.PLAYING);
+            }
+            if (key == KeyEvent.VK_ESCAPE) {
+                System.exit(0);
+            }
+            return;
+        }
+
+        // ===== PLAYING =====
+        if (gameStateManager.is(GameState.PLAYING)) {
+            if (key == KeyEvent.VK_W || key == KeyEvent.VK_UP)
+                upPressed = true;
+            if (key == KeyEvent.VK_S || key == KeyEvent.VK_DOWN)
+                downPressed = true;
+            if (key == KeyEvent.VK_A || key == KeyEvent.VK_LEFT)
+                leftPressed = true;
+            if (key == KeyEvent.VK_D || key == KeyEvent.VK_RIGHT)
+                rightPressed = true;
+
+            if (key == KeyEvent.VK_P) {
+                gameStateManager.setState(GameState.PAUSED); // Toggle pause
+            }
+
+            if (key == KeyEvent.VK_F11)
+                setFullscreen(!fullscreen);
+
+            if (key == KeyEvent.VK_ESCAPE)
+                System.exit(0);
+
+            if (key == KeyEvent.VK_1) camera.shakeLight();
+            if (key == KeyEvent.VK_2) camera.shakeDefault();
+            if (key == KeyEvent.VK_3) camera.shakeHard();
+
+            if (key == KeyEvent.VK_Z) camera.startZoomInEffect();
+            if (key == KeyEvent.VK_X) camera.startZoomOutEffect();
+
+            if (key == KeyEvent.VK_I) startFadeIn();
+            if (key == KeyEvent.VK_O) startFadeOut();
+
+            if (key == KeyEvent.VK_EQUALS || key == KeyEvent.VK_ADD)
+                camera.zoomIn(0.1f);
+
+            if (key == KeyEvent.VK_MINUS || key == KeyEvent.VK_SUBTRACT)
+                camera.zoomOut(0.1f);
+
+            updatePlayerVelocity();
+        }
     }
 
     @Override
@@ -341,5 +520,49 @@ public class Game implements Runnable, KeyListener {
     @Override
     public void keyTyped(KeyEvent e) {
         // Not used.
+    }
+    
+    private void setFadeState(FadeState newState) {
+        if (fadeState != newState) {
+            System.out.println("FadeState changed: " + fadeState + " → " + newState);
+            fadeState = newState;
+        }
+    }
+    
+    public void startFadeOut() {
+        if (fadeState != FadeState.NONE) return; // Only allow if not already fading
+        if (previousFade == FadeState.FADE_OUT) return;
+        setFadeState(FadeState.FADE_OUT);
+        fadeAlpha = 0.0f;
+        fadeState = FadeState.FADE_OUT;
+        fadeStartTime = System.currentTimeMillis();
+    }
+
+    public void startFadeIn() {
+        if (fadeState != FadeState.NONE) return;           // Only allow if not already fading
+        if (previousFade != FadeState.FADE_OUT) return;    // Only allow if last fade was fadeOut
+        setFadeState(FadeState.FADE_IN);
+        fadeAlpha = 1.0f;
+        fadeState = FadeState.FADE_IN;
+        fadeStartTime = System.currentTimeMillis();
+    }
+    
+    private void drawMenuButton(Graphics2D g, int x, int y, int width, int height, String label) {
+        // Button background
+        g.setColor(Color.LIGHT_GRAY);
+        g.fillRoundRect(x, y, width, height, 10, 10);
+
+        // Button border
+        g.setColor(Color.BLACK);
+        g.drawRoundRect(x, y, width, height, 10, 10);
+
+        // Label
+        g.setColor(Color.BLACK);
+        FontMetrics fm = g.getFontMetrics();
+        int textWidth = fm.stringWidth(label);
+        int textHeight = fm.getAscent();
+        int textX = x + (width - textWidth) / 2;
+        int textY = y + ((height + textHeight) / 2) - 3;
+        g.drawString(label, textX, textY);
     }
 }

@@ -8,6 +8,10 @@ public class Camera {
     private Optional<GameObject> objectWithFocus = Optional.empty();
     private MapBounds mapBounds;
     
+    private float followSmoothness = 0.1f; // Lower = slower, higher = snappier (range: 0 < smoothness ≤ 1)
+    
+    private boolean justFocused = true;
+    
     private float zoom = 1.0f; // default = 100%
     private float shakeIntensity = 0f;
     private long shakeDuration = 0;
@@ -45,6 +49,7 @@ public class Camera {
 
     public void focusOn(GameObject obj) {
         this.objectWithFocus = Optional.of(obj);
+        this.justFocused = true;
     }
 
     public void update() {
@@ -62,16 +67,6 @@ public class Camera {
 
             camX = Math.max(mapBounds.getMinX(), Math.min(camX, maxCamX));
             camY = Math.max(mapBounds.getMinY(), Math.min(camY, maxCamY));
-
-            // Apply shake
-            long now = System.currentTimeMillis();
-            if (now - shakeStartTime < shakeDuration) {
-                shakeOffsetX = (float) ((Math.random() - 0.5f) * 2 * shakeIntensity);
-                shakeOffsetY = (float) ((Math.random() - 0.5f) * 2 * shakeIntensity);
-            } else {
-                shakeOffsetX = 0;
-                shakeOffsetY = 0;
-            }
             
             if (zoomingIn && zoom < MAX_ZOOM) {
                 setZoom(zoom + zoomSpeed);
@@ -89,8 +84,35 @@ public class Camera {
                 }
             }
 
-            position.setX(camX + shakeOffsetX);
-            position.setY(camY + shakeOffsetY);
+            float targetX = camX;
+            float targetY = camY;
+
+            if (justFocused) {
+                position.setX(targetX);
+                position.setY(targetY);
+                justFocused = false;
+            } else {
+                float newX = lerp(position.getX(), targetX, followSmoothness);
+                float newY = lerp(position.getY(), targetY, followSmoothness);
+                position.setX(newX);
+                position.setY(newY);
+            }
+
+            // Now apply shake *after* smoothing
+            position.setX(position.getX() + shakeOffsetX);
+            position.setY(position.getY() + shakeOffsetY);
+            
+         // Apply shake with decay
+            long now = System.currentTimeMillis();
+            if (now - shakeStartTime < shakeDuration) {
+                float timeRatio = 1f - (float)(now - shakeStartTime) / shakeDuration;
+                float decay = shakeIntensity * timeRatio;
+                shakeOffsetX = (float) ((Math.random() - 0.5f) * 2 * decay);
+                shakeOffsetY = (float) ((Math.random() - 0.5f) * 2 * decay);
+            } else {
+                shakeOffsetX = 0;
+                shakeOffsetY = 0;
+            }
         }
     }
     
@@ -155,5 +177,9 @@ public class Camera {
 
     public Position getPosition() {
         return position;
+    }
+    
+    private float lerp(float start, float end, float amt) {
+        return start + (end - start) * amt;
     }
 }
