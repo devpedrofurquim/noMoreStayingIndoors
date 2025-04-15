@@ -7,6 +7,7 @@ import java.awt.event.KeyListener;
 import java.awt.geom.AffineTransform;
 import java.awt.image.BufferStrategy;
 import java.awt.image.BufferedImage;
+import java.io.IOException;
 
 public class Game implements Runnable, KeyListener {
 
@@ -24,6 +25,8 @@ public class Game implements Runnable, KeyListener {
     private FadeState fadeState = FadeState.NONE;
     private long fadeDuration = 1000; // Duration of the fade effect in milliseconds (1000ms = 1 second)
     private long fadeStartTime = 0;   // The time when the fade effect starts
+    
+    private BitmapFont menuFont;
     
     private GameStateManager gameStateManager;
     
@@ -43,6 +46,14 @@ public class Game implements Runnable, KeyListener {
     private final int INTERNAL_HEIGHT = INTERNAL_WIDTH / 16 * 9; 
     private boolean fullscreen = true;
     private GraphicsDevice graphicsDevice;
+    
+    private MainMenu mainMenu;
+    private PauseScreen pauseScreen;
+    private GameOverScreen gameOverScreen;
+    
+    private float menuAlpha = 0.0f;
+    private long menuFadeStartTime = 0;
+    private final long MENU_FADE_DURATION = 1000; // 1 second in milliseconds
     
     private Camera camera;
 
@@ -73,18 +84,37 @@ public class Game implements Runnable, KeyListener {
         frame.setUndecorated(true); // no window borders
         frame.setResizable(true);
         // testasd
+        
+        menuFadeStartTime = System.currentTimeMillis();
+        menuAlpha = 0.0f;
 
         frame.add(canvas);
         // Initially pack, though setFullscreen() will adjust things.
         frame.pack();
         frame.setLocationRelativeTo(null);
 
-        // Set fullscreen (or windowed) mode.
+        // Set fullscreen (or windowed) mod e.
         setFullscreen(fullscreen);
 
         frame.setVisible(true);
 
         player = new Player(new Position(100.0f, 100.0f));
+        
+        try {
+            // Character order must match your image layout
+        	menuFont = new BitmapFont("res/Kenney.ttf", 12f);
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (FontFormatException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+        
+        mainMenu = new MainMenu(menuFont, INTERNAL_WIDTH, INTERNAL_HEIGHT);
+        
+        pauseScreen = new PauseScreen(menuFont, INTERNAL_WIDTH, INTERNAL_HEIGHT);
+        
+        gameOverScreen = new GameOverScreen(menuFont, INTERNAL_WIDTH, INTERNAL_HEIGHT);
         
         // Create forest bounds (for example, a 800x600 area)
         forestBounds = new MapBounds(0, 0, 512, 512);
@@ -207,6 +237,10 @@ public class Game implements Runnable, KeyListener {
                 fadeAlpha = fadeProgress;
             }
         }
+        
+        if (gameStateManager.is(GameState.MAIN_MENU)) {
+            mainMenu.update();
+        }
 
         if (gameStateManager.is(GameState.PLAYING)) {
             updatePlayerVelocity();
@@ -219,6 +253,14 @@ public class Game implements Runnable, KeyListener {
             player.setPosition(new Position(clampedX, clampedY));
 
             camera.update();
+        }
+        
+        if (gameStateManager.is(GameState.PAUSED)) {
+            pauseScreen.update();
+        }
+        
+        if (gameStateManager.is(GameState.GAME_OVER)) {
+            gameOverScreen.update();
         }
     }
 
@@ -245,79 +287,11 @@ public class Game implements Runnable, KeyListener {
 
         switch (gameStateManager.getState()) {
         case MAIN_MENU:
-        	g.setColor(Color.BLACK);
-        	g.fillRect(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT);
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
+            g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_OFF);
+            g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_SPEED);
 
-        	// Colors
-        	g.setColor(Color.WHITE);
-
-        	// Clamped, tight font sizes
-        	int titleFontSize = Math.max(10, INTERNAL_HEIGHT / 15);
-        	int subFontSize = Math.max(6, INTERNAL_HEIGHT / 32);
-        	int btnFontSize = Math.max(8, INTERNAL_HEIGHT / 28);
-
-        	Font titleFont = new Font("Monospaced", Font.BOLD, titleFontSize);
-        	Font subFont = new Font("Monospaced", Font.PLAIN, subFontSize);
-        	Font btnFont = new Font("Monospaced", Font.BOLD, btnFontSize);
-
-        	// Title
-        	g.setFont(titleFont);
-        	FontMetrics fmTitle = g.getFontMetrics();
-        	String[] titleLines = {"No More", "Staying", "Indoors"};
-        	int titleLineHeight = fmTitle.getHeight();
-
-        	// Subtitle
-        	g.setFont(subFont);
-        	FontMetrics fmSub = g.getFontMetrics();
-        	String subtitle = "by pedro furquim";
-        	String pressEnter = "Press ENTER to Start";
-        	int subtitleHeight = fmSub.getHeight();
-        	int pressEnterHeight = fmSub.getHeight();
-
-        	// Buttons
-        	g.setFont(btnFont);
-        	FontMetrics fmBtn = g.getFontMetrics();
-        	String[] buttons = {"START GAME", "OPTIONS", "EXIT"};
-        	int btnHeight = fmBtn.getHeight() + 2;
-        	int btnWidth = INTERNAL_WIDTH - 60;
-        	int btnSpacing = 2;
-
-        	// Total compact layout height
-        	int totalHeight =
-        	    (titleLineHeight * titleLines.length) +
-        	    subtitleHeight + 2 +
-        	    pressEnterHeight + 2 +
-        	    (buttons.length * (btnHeight + btnSpacing));
-
-        	int startY = (INTERNAL_HEIGHT - totalHeight) / 2;
-
-        	// ----- Title -----
-        	g.setFont(titleFont);
-        	for (String line : titleLines) {
-        	    int w = fmTitle.stringWidth(line);
-        	    g.drawString(line, (INTERNAL_WIDTH - w) / 2, startY);
-        	    startY += titleLineHeight;
-        	}
-        	startY += 2;
-
-        	// ----- Subtitle -----
-        	g.setFont(subFont);
-        	int subW = fmSub.stringWidth(subtitle);
-        	g.drawString(subtitle, (INTERNAL_WIDTH - subW) / 2, startY);
-        	startY += subtitleHeight + 2;
-
-        	// ----- Press ENTER -----
-        	int pressW = fmSub.stringWidth(pressEnter);
-        	g.drawString(pressEnter, (INTERNAL_WIDTH - pressW) / 2, startY);
-        	startY += pressEnterHeight + 2;
-
-        	// ----- Buttons -----
-        	g.setFont(btnFont);
-        	int btnX = (INTERNAL_WIDTH - btnWidth) / 2;
-        	for (String label : buttons) {
-        	    drawMenuButton(g, btnX, startY, btnWidth, btnHeight, label);
-        	    startY += btnHeight + btnSpacing;
-        	}
+            mainMenu.render(g);
             break;
             case PLAYING:
                 // Translate and scale camera
@@ -350,19 +324,11 @@ public class Game implements Runnable, KeyListener {
                 break;
 
             case PAUSED:
-                g.setColor(Color.DARK_GRAY);
-                g.fillRect(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT);
-                g.setColor(Color.WHITE);
-                g.setFont(new Font("Arial", Font.PLAIN, 12));
-                g.drawString("PAUSED - Press P to Resume", 60, INTERNAL_HEIGHT / 2);
+            	pauseScreen.render(g);
                 break;
 
             case GAME_OVER:
-                g.setColor(Color.BLACK);
-                g.fillRect(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT);
-                g.setColor(Color.RED);
-                g.setFont(new Font("Arial", Font.BOLD, 14));
-                g.drawString("GAME OVER - Press R to Retry", 50, INTERNAL_HEIGHT / 2);
+                gameOverScreen.render(g);
                 break;
         }
 
@@ -397,6 +363,7 @@ public class Game implements Runnable, KeyListener {
                 xOffset, yOffset, xOffset + finalW, yOffset + finalH,
                 0, 0, imageW, imageH,
                 null);
+       
 
         // Draw fade overlay (if active)
         gFinal.setColor(new Color(0, 0, 0, fadeAlpha));
@@ -464,6 +431,11 @@ public class Game implements Runnable, KeyListener {
 
         // ===== PLAYING =====
         if (gameStateManager.is(GameState.PLAYING)) {
+        	  if (key == KeyEvent.VK_T) {
+                  gameStateManager.setState(GameState.GAME_OVER);
+                  gameOverScreen.resetFade();
+              }
+
             if (key == KeyEvent.VK_W || key == KeyEvent.VK_UP)
                 upPressed = true;
             if (key == KeyEvent.VK_S || key == KeyEvent.VK_DOWN)
@@ -475,10 +447,8 @@ public class Game implements Runnable, KeyListener {
 
             if (key == KeyEvent.VK_P) {
                 gameStateManager.setState(GameState.PAUSED); // Toggle pause
+                pauseScreen.resetFade();
             }
-
-            if (key == KeyEvent.VK_F11)
-                setFullscreen(!fullscreen);
 
             if (key == KeyEvent.VK_ESCAPE)
                 System.exit(0);
@@ -498,7 +468,12 @@ public class Game implements Runnable, KeyListener {
 
             if (key == KeyEvent.VK_MINUS || key == KeyEvent.VK_SUBTRACT)
                 camera.zoomOut(0.1f);
-
+            
+            if (key == KeyEvent.VK_R) {
+                gameStateManager.setState(GameState.MAIN_MENU);
+                mainMenu.resetFade();
+            }
+            
             updatePlayerVelocity();
         }
     }
