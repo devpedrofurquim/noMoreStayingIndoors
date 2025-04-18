@@ -70,6 +70,8 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
     private long menuFadeStartTime = 0;
     private final long MENU_FADE_DURATION = 1000; // 1 second in milliseconds
     
+    private NewGameScreen newGameScreen;
+    
     private Camera camera;
 
     private volatile boolean safeToRender = true;
@@ -147,12 +149,15 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
         canvas.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
+                Point p = translateMousePoint(e.getPoint());
+
                 if (gameStateManager.is(GameState.MAIN_MENU)) {
                     // Adjust coordinates for scaling/fullscreen clearly
-                    Point p = translateMousePoint(e.getPoint());
                     mainMenu.mouseClicked(new MouseEvent(
                         e.getComponent(), e.getID(), e.getWhen(), e.getModifiersEx(), p.x, p.y, e.getClickCount(), e.isPopupTrigger()
                     ));
+                } else if (gameStateManager.is(GameState.NEW_GAME)) {
+                    newGameScreen.mouseClicked(p);
                 }
             }
         });
@@ -174,9 +179,20 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
         running = true;
         new Thread(this).start();
     }
+    
+    public GameStateManager getGameStateManager() {
+        return gameStateManager;
+    }
 
     public synchronized void stop() {
         running = false;
+    }
+    
+    private MouseEvent adjustMouseEvent(MouseEvent e, Point p) {
+        return new MouseEvent(
+            e.getComponent(), e.getID(), e.getWhen(), e.getModifiersEx(),
+            p.x, p.y, e.getClickCount(), e.isPopupTrigger()
+        );
     }
 
     /**
@@ -280,6 +296,12 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
             }
         }
         
+        // ✅ Adicione aqui:
+        if (gameStateManager.is(GameState.NEW_GAME)) {
+            newGameScreen.tick(deltaTime);
+        }
+        
+        
         if (showingCredits) {
             long elapsed = System.currentTimeMillis() - creditsStartTime;
 
@@ -328,6 +350,10 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
         if (gameStateManager.is(GameState.GAME_OVER)) {
             gameOverScreen.update();
         }
+    }
+    
+    public void requestRender() {
+        render(); // chama a renderização imediata (dentro do loop de jogo, isso é seguro)
     }
 
     /**
@@ -401,6 +427,9 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
 
             case GAME_OVER:
                 gameOverScreen.render(g);
+                break;
+            case NEW_GAME:
+                newGameScreen.render(g);
                 break;
         }
 
@@ -544,6 +573,11 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
             
             updatePlayerVelocity();
         }
+        
+        if (gameStateManager.is(GameState.NEW_GAME)) {
+            newGameScreen.keyPressed(e);
+            return;
+        }
     }
 
     @Override
@@ -567,7 +601,9 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
 
     @Override
     public void keyTyped(KeyEvent e) {
-        // Not used.
+        if (gameStateManager.is(GameState.NEW_GAME)) {
+            newGameScreen.keyTyped(e);
+        }
     }
     
     private void setFadeState(FadeState newState) {
@@ -650,11 +686,12 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
         System.exit(0);
     }
 
-	@Override
-	public void onNewGame() {
-	    System.out.println("Naming your save... (not implemented)");
-	}
-
+    @Override
+    public void onNewGame() {
+        newGameScreen = new NewGameScreen(menuFont, INTERNAL_WIDTH, INTERNAL_HEIGHT, this);
+        gameStateManager.setState(GameState.NEW_GAME);
+    }
+    
 	@Override
 	public void onLoadGame() {
 	    System.out.println("Showing save slots... (not implemented)");		

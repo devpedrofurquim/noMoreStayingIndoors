@@ -18,6 +18,9 @@ public class MainMenu {
     private List<MenuButton> buttons;
     private int selectedButtonIndex = 0;
     
+    private boolean needsRebuild = false;
+    private String[] nextButtons = null;
+    
     private MenuActionListener listener;
     
     private MenuScreen currentScreen = MenuScreen.MAIN;
@@ -41,8 +44,29 @@ public class MainMenu {
         long elapsed = System.currentTimeMillis() - fadeStartTime;
         float progress = elapsed / (float) fadeDuration;
         alpha = Math.min(progress, 1.0f);
-    }
 
+        if (needsRebuild && nextButtons != null) {
+            buttons.clear();
+
+            int maxButtons = nextButtons.length;
+            int availableHeight = height - 60;
+            int verticalPadding = 12;
+            float maxScale = Math.min(1.8f, (float)(availableHeight / maxButtons - verticalPadding) / 10f);
+            float finalScale = Math.max(0.9f, Math.min(1.2f, maxScale));
+
+            for (String label : nextButtons) {
+                buttons.add(new MenuButton(label, finalScale));
+            }
+
+            selectedButtonIndex = 0;
+            if (!buttons.isEmpty()) {
+                buttons.get(0).setSelected(true);
+            }
+
+            nextButtons = null;
+            needsRebuild = false;
+        }
+    }
     public void render(Graphics2D g) {
         g.setColor(Color.BLACK);
         g.fillRect(0, 0, width, height);
@@ -219,24 +243,8 @@ public class MainMenu {
     }
     
     private void rebuildButtons(String... labels) {
-        buttons.clear();
-
-        int maxButtons = labels.length;
-        int availableHeight = height - 60; // leave space for title
-        int verticalPadding = 12;
-
-        // Estimate: Each button height ~10px per scale unit + padding
-        float maxScale = Math.min(1.8f, (float)(availableHeight / maxButtons - verticalPadding) / 10f);
-        float finalScale = Math.max(0.9f, Math.min(1.2f, maxScale)); // clamp between 0.9 and 1.2
-
-        for (String label : labels) {
-            buttons.add(new MenuButton(label, finalScale));
-        }
-
-        selectedButtonIndex = 0;
-        if (!buttons.isEmpty()) {
-            buttons.get(0).setSelected(true);
-        }
+        nextButtons = labels;
+        needsRebuild = true;
     }
     
     public void setMenuActionListener(MenuActionListener listener) {
