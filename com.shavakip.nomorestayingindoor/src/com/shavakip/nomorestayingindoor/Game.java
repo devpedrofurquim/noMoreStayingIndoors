@@ -23,6 +23,18 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
     private Canvas canvas;
     private Player player;
     private MapBounds forestBounds;
+    private float overlayAlpha = 0.0f;
+
+    
+    private final long CREDITS_TOTAL_DURATION = 10000; // 10 seconds total
+    private final long CREDITS_FADE_DURATION = 1000;   // 1s fade in/out
+    
+    private CreditsScreen creditsScreen;
+
+    
+    private boolean showingCredits = false;
+    private long creditsStartTime = 0;
+    private final long CREDITS_DURATION = 5000; // 5 seconds
     
     private float fadeAlpha = 0.0f;  // Current alpha value (0.0 = fully transparent, 1.0 = fully opaque)
     private FadeState fadeState = FadeState.NONE;
@@ -115,6 +127,7 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
         
         mainMenu = new MainMenu(menuFont, INTERNAL_WIDTH, INTERNAL_HEIGHT);
         mainMenu.setMenuActionListener(this); // clearly set the listener!
+        creditsScreen = new CreditsScreen(menuFont, INTERNAL_WIDTH, INTERNAL_HEIGHT, CREDITS_TOTAL_DURATION, CREDITS_FADE_DURATION);
         
         pauseScreen = new PauseScreen(menuFont, INTERNAL_WIDTH, INTERNAL_HEIGHT);
         
@@ -261,10 +274,34 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
             }
 
             if (fadeState == FadeState.FADE_IN) {
-                fadeAlpha = 1.0f - fadeProgress;
+            	overlayAlpha = 1.0f - fadeProgress;
             } else if (fadeState == FadeState.FADE_OUT) {
-                fadeAlpha = fadeProgress;
+            	overlayAlpha = fadeProgress;
             }
+        }
+        
+        if (showingCredits) {
+            long elapsed = System.currentTimeMillis() - creditsStartTime;
+
+            // Wait 500ms before starting text visibility
+            if (elapsed < 500) {
+                fadeAlpha = 0f;
+            } else if (elapsed > CREDITS_TOTAL_DURATION - CREDITS_FADE_DURATION) {
+                float fadeOutTime = CREDITS_TOTAL_DURATION - elapsed;
+                fadeAlpha = Math.max(0f, fadeOutTime / CREDITS_FADE_DURATION);
+            } else {
+                fadeAlpha = 1.0f;
+            }
+
+            // Exit credits after duration
+            if (elapsed >= CREDITS_TOTAL_DURATION) {
+                showingCredits = false;
+                gameStateManager.setState(GameState.MAIN_MENU);
+                mainMenu.resetFade();
+                fadeAlpha = 0f;
+            }
+
+            return;
         }
         
         if (gameStateManager.is(GameState.MAIN_MENU)) {
@@ -313,6 +350,12 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
         Graphics2D g = image.createGraphics();
         g.setColor(Color.PINK);
         g.fillRect(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT);
+        
+        if (showingCredits) {
+            long elapsed = System.currentTimeMillis() - creditsStartTime;
+            creditsScreen.render(g, elapsed, fadeAlpha);
+            g.dispose();
+        }
 
         switch (gameStateManager.getState()) {
         case MAIN_MENU:
@@ -395,7 +438,7 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
        
 
         // Draw fade overlay (if active)
-        gFinal.setColor(new Color(0, 0, 0, fadeAlpha));
+        gFinal.setColor(new Color(0, 0, 0, overlayAlpha));
         gFinal.fillRect(0, 0, screenW, screenH);
 
         gFinal.dispose();
@@ -429,12 +472,6 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
         // ===== MAIN MENU =====
         if (gameStateManager.is(GameState.MAIN_MENU)) {
             mainMenu.keyPressed(e);
-            if (key == KeyEvent.VK_ENTER) {
-                gameStateManager.setState(GameState.PLAYING);
-            }
-            if (key == KeyEvent.VK_ESCAPE) {
-                System.exit(0);
-            }
             return;
         }
 
@@ -612,4 +649,34 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
     public void onExit() {
         System.exit(0);
     }
+
+	@Override
+	public void onNewGame() {
+	    System.out.println("Naming your save... (not implemented)");
+	}
+
+	@Override
+	public void onLoadGame() {
+	    System.out.println("Showing save slots... (not implemented)");		
+	}
+
+	@Override
+	public void onBack() {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void onCredits() {
+	    showingCredits = true;
+	    creditsStartTime = System.currentTimeMillis();
+	    fadeAlpha = 0f;
+	    fadeStartTime = System.currentTimeMillis();
+	}
+
+	@Override
+	public void onSecretMessage() {
+		// TODO Auto-generated method stub
+		
+	}
 }

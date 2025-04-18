@@ -23,7 +23,7 @@ public class MenuButton {
     }
 
     public void render(Graphics2D g, BitmapFont font, float alpha) {
-        Color color = selected ? Color.YELLOW : Color.WHITE;
+        Color color = selected ? Color.PINK : Color.WHITE;
         font.drawString(g, text, x, y, scale, color, alpha);
     }
 
