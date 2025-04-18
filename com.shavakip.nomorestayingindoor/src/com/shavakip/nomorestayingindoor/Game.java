@@ -4,12 +4,15 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseMotionAdapter;
 import java.awt.geom.AffineTransform;
 import java.awt.image.BufferStrategy;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 
-public class Game implements Runnable, KeyListener {
+public class Game implements Runnable, KeyListener, MenuActionListener {
 
     private JFrame frame;
     private boolean running = false;
@@ -111,6 +114,7 @@ public class Game implements Runnable, KeyListener {
 		}
         
         mainMenu = new MainMenu(menuFont, INTERNAL_WIDTH, INTERNAL_HEIGHT);
+        mainMenu.setMenuActionListener(this); // clearly set the listener!
         
         pauseScreen = new PauseScreen(menuFont, INTERNAL_WIDTH, INTERNAL_HEIGHT);
         
@@ -126,6 +130,31 @@ public class Game implements Runnable, KeyListener {
         gameStateManager = new GameStateManager(); // Start at MAIN_MENU
         
         canvas.addKeyListener(this);
+        
+        canvas.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (gameStateManager.is(GameState.MAIN_MENU)) {
+                    // Adjust coordinates for scaling/fullscreen clearly
+                    Point p = translateMousePoint(e.getPoint());
+                    mainMenu.mouseClicked(new MouseEvent(
+                        e.getComponent(), e.getID(), e.getWhen(), e.getModifiersEx(), p.x, p.y, e.getClickCount(), e.isPopupTrigger()
+                    ));
+                }
+            }
+        });
+
+        canvas.addMouseMotionListener(new MouseMotionAdapter() {
+            @Override
+            public void mouseMoved(MouseEvent e) {
+                if (gameStateManager.is(GameState.MAIN_MENU)) {
+                    Point p = translateMousePoint(e.getPoint());
+                    mainMenu.mouseMoved(new MouseEvent(
+                        e.getComponent(), e.getID(), e.getWhen(), e.getModifiersEx(), p.x, p.y, e.getClickCount(), e.isPopupTrigger()
+                    ));
+                }
+            }
+        });
     }
 
     public synchronized void start() {
@@ -393,11 +422,13 @@ public class Game implements Runnable, KeyListener {
     public void keyPressed(KeyEvent e) {
         int key = e.getKeyCode();
         
+        
         if (key == KeyEvent.VK_F11)
             setFullscreen(!fullscreen);
 
         // ===== MAIN MENU =====
         if (gameStateManager.is(GameState.MAIN_MENU)) {
+            mainMenu.keyPressed(e);
             if (key == KeyEvent.VK_ENTER) {
                 gameStateManager.setState(GameState.PLAYING);
             }
@@ -481,6 +512,11 @@ public class Game implements Runnable, KeyListener {
     @Override
     public void keyReleased(KeyEvent e) {
         int key = e.getKeyCode();
+        
+        if (gameStateManager.is(GameState.MAIN_MENU)) {
+            return; // If you have keyReleased logic in MainMenu, forward here too.
+        }
+        
         if (key == KeyEvent.VK_W || key == KeyEvent.VK_UP)
             upPressed = false;
         if (key == KeyEvent.VK_S || key == KeyEvent.VK_DOWN)
@@ -539,5 +575,41 @@ public class Game implements Runnable, KeyListener {
         int textX = x + (width - textWidth) / 2;
         int textY = y + ((height + textHeight) / 2) - 3;
         g.drawString(label, textX, textY);
+    }
+    
+    private Point translateMousePoint(Point p) {
+        int screenW = canvas.getWidth();
+        int screenH = canvas.getHeight();
+
+        double scaleX = screenW / (double) INTERNAL_WIDTH;
+        double scaleY = screenH / (double) INTERNAL_HEIGHT;
+        double scale = Math.min(scaleX, scaleY);
+
+        int finalW = (int) (INTERNAL_WIDTH * scale);
+        int finalH = (int) (INTERNAL_HEIGHT * scale);
+
+        int xOffset = (screenW - finalW) / 2;
+        int yOffset = (screenH - finalH) / 2;
+
+        int translatedX = (int)((p.x - xOffset) / scale);
+        int translatedY = (int)((p.y - yOffset) / scale);
+
+        return new Point(translatedX, translatedY);
+    }
+    
+    @Override
+    public void onStartGame() {
+        gameStateManager.setState(GameState.PLAYING);
+        System.out.println("Game Started!");
+    }
+
+    @Override
+    public void onOptions() {
+        System.out.println("Options clicked! (not implemented yet)");
+    }
+
+    @Override
+    public void onExit() {
+        System.exit(0);
     }
 }

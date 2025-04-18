@@ -26,6 +26,11 @@ public class BitmapFont {
             cursorX += fm.charWidth(c);
         }
     }
+    
+    public Font getFont() {
+        return font;
+    }
+    
     public int getTextWidth(String text, float scale) {
         BufferedImage img = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g2d = img.createGraphics();
