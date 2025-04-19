@@ -94,7 +94,7 @@ public class MainMenu {
             int btnWidth = font.getTextWidth(btn.getText(), btn.scale);
             int btnX = (width - btnWidth) / 2;
             btn.setPosition(btnX, startY, font, tmpG);
-            btn.render(g, font, alpha);
+            btn.render(g, font, alpha, null);
             startY += btn.height + 12; // Add vertical spacing between buttons
         }
 

@@ -34,9 +34,14 @@ public class SaveManager {
         return getSaveFile(slot).exists();
     }
 
-    public void deleteSlot(int slot) {
-        File f = getSaveFile(slot);
-        if (f.exists()) f.delete();
+    public void deleteSaveSlot(int slot) {
+        File file = getSaveFile(slot);
+        if (file.exists()) {
+            file.delete();
+            System.out.println("Deleted file: " + file.getAbsolutePath());
+        } else {
+            System.out.println("File not found: " + file.getAbsolutePath());
+        }
     }
 
     private File getSaveFile(int slot) {

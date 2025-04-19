@@ -22,8 +22,8 @@ public class MenuButton {
         this.height = fm.getHeight();
     }
 
-    public void render(Graphics2D g, BitmapFont font, float alpha) {
-        Color color = selected ? Color.PINK : Color.WHITE;
+    public void render(Graphics2D g, BitmapFont font, float alpha, Color overrideColor) {
+        Color color = overrideColor != null ? overrideColor : (selected ? Color.PINK : Color.WHITE);
         font.drawString(g, text, x, y, scale, color, alpha);
     }
 

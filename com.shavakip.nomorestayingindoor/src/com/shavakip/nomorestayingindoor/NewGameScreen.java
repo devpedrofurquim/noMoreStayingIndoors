@@ -81,25 +81,25 @@ public class NewGameScreen {
         g.setColor(Color.BLACK);
         g.fillRect(0, 0, width, height);
 
-        // Title
+        // Title (move higher)
         String title = "Name your save:";
         int titleWidth = font.getTextWidth(title, 1.2f);
-        font.drawString(g, title, (width - titleWidth) / 2, 60, 1.2f, Color.WHITE, 1f);
+        font.drawString(g, title, (width - titleWidth) / 2, 30, 1.2f, Color.WHITE, 1f); // Y = 30
 
-        // Text input
+        // Text input (move higher)
         String inputText = saveName.toString() + (showCursor && selectedIndex == -1 ? "|" : "");
         int inputWidth = font.getTextWidth(inputText, 1.0f);
-        font.drawString(g, inputText, (width - inputWidth) / 2, 100, 1.2f, Color.PINK, 1f);
+        font.drawString(g, inputText, (width - inputWidth) / 2, 65, 1.2f, Color.PINK, 1f); // Y = 65
 
-        // Error message
+        // Error message (move higher)
         if (!errorMessage.isEmpty()) {
             int errorWidth = font.getTextWidth(errorMessage, 0.9f);
-            font.drawString(g, errorMessage, (width - errorWidth) / 2, 130, 1.2f, Color.RED, 1f);
+            font.drawString(g, errorMessage, (width - errorWidth) / 2, 95, 1.2f, Color.RED, 1f); // Y = 95
         }
 
         // Position buttons
         int spacing = 20;
-        int buttonY = 150;
+        int buttonY = 120; // Previously 150 → moved up
 
         // Pre-measure widths
         backButton.setPosition(0, 0, font, g);  // measure width
@@ -113,8 +113,8 @@ public class NewGameScreen {
         okButton.setPosition(startX + backButton.width + spacing, buttonY, font, g);
 
         // Render buttons
-        backButton.render(g, font, 1f);
-        okButton.render(g, font, 1f);
+        backButton.render(g, font, 1f, null);
+        okButton.render(g, font, 1f, null);
     }
 
     public void mouseMoved(Point p) {
