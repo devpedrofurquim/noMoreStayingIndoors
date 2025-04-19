@@ -25,8 +25,8 @@ public class NewGameScreen {
         this.height = height;
         this.game = game;
 
-        okButton = new MenuButton("OK", 1.0f);
-        backButton = new MenuButton("GO BACK", 1.0f);
+        okButton = new MenuButton("START", 1.2f);
+        backButton = new MenuButton("GO BACK", 1.2f);
         buttons = new MenuButton[]{backButton, okButton};
     }
 
@@ -153,12 +153,13 @@ public class NewGameScreen {
         String trimmedName = getTrimmedSaveName();
         if (trimmedName.isEmpty()) {
             errorMessage = "Name can't be empty.";
-        } else {
-            errorMessage = "";
-            game.onStartGame();
+            return;
         }
-    }
 
+        game.setPendingSaveName(trimmedName); // Store name temporarily
+        game.onStartGame(); // Actual save happens after game begins
+    }
+    
     private void updateButtonSelection() {
         for (int i = 0; i < buttons.length; i++) {
             buttons[i].setSelected(i == selectedIndex);

@@ -31,6 +31,12 @@ public class BitmapFont {
         return font;
     }
     
+    public int getLineHeight(Graphics2D g, float scale) {
+        Font scaledFont = font.deriveFont(font.getSize2D() * scale);
+        FontMetrics fm = g.getFontMetrics(scaledFont);
+        return fm.getAscent(); // or fm.getHeight() if you want full line height
+    }
+    
     public int getTextWidth(String text, float scale) {
         BufferedImage img = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g2d = img.createGraphics();

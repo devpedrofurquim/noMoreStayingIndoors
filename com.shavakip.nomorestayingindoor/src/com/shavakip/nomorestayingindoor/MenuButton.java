@@ -30,6 +30,10 @@ public class MenuButton {
     public boolean contains(int mx, int my) {
         return mx >= x && mx <= x + width && my >= (y - height) && my <= y;
     }
+    
+    public void setText(String text) {
+        this.text = text;
+    }
 
     public void setSelected(boolean selected) {
         this.selected = selected;

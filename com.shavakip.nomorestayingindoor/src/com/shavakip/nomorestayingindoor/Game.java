@@ -24,7 +24,10 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
     private Player player;
     private MapBounds forestBounds;
     private float overlayAlpha = 0.0f;
+    private String pendingSaveName = null;
 
+    
+    public SaveManager saveManager;
     
     private final long CREDITS_TOTAL_DURATION = 10000; // 10 seconds total
     private final long CREDITS_FADE_DURATION = 1000;   // 1s fade in/out
@@ -41,9 +44,15 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
     private long fadeDuration = 1000; // Duration of the fade effect in milliseconds (1000ms = 1 second)
     private long fadeStartTime = 0;   // The time when the fade effect starts
     
+    private String saveMessage = null;
+    private long saveMessageStartTime = 0;
+    private final long SAVE_MESSAGE_DURATION = 2500; // 2.5 seconds
+    
     private BitmapFont menuFont;
     
     private GameStateManager gameStateManager;
+    
+    private SavePopup savePopup;
     
     private enum FadeState {
         NONE,
@@ -71,6 +80,7 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
     private final long MENU_FADE_DURATION = 1000; // 1 second in milliseconds
     
     private NewGameScreen newGameScreen;
+    private LoadGameScreen loadGameScreen;
     
     private Camera camera;
 
@@ -127,6 +137,8 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
 			e.printStackTrace();
 		}
         
+        saveManager = new SaveManager();
+        
         mainMenu = new MainMenu(menuFont, INTERNAL_WIDTH, INTERNAL_HEIGHT);
         mainMenu.setMenuActionListener(this); // clearly set the listener!
         creditsScreen = new CreditsScreen(menuFont, INTERNAL_WIDTH, INTERNAL_HEIGHT, CREDITS_TOTAL_DURATION, CREDITS_FADE_DURATION);
@@ -134,6 +146,10 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
         pauseScreen = new PauseScreen(menuFont, INTERNAL_WIDTH, INTERNAL_HEIGHT);
         
         gameOverScreen = new GameOverScreen(menuFont, INTERNAL_WIDTH, INTERNAL_HEIGHT);
+        
+        loadGameScreen = new LoadGameScreen(menuFont, INTERNAL_WIDTH, INTERNAL_HEIGHT, this);
+        
+        savePopup = new SavePopup(menuFont); // scaled size
         
         // Create forest bounds (for example, a 800x600 area)
         forestBounds = new MapBounds(0, 0, 512, 512);
@@ -158,6 +174,8 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
                     ));
                 } else if (gameStateManager.is(GameState.NEW_GAME)) {
                     newGameScreen.mouseClicked(p);
+                }  else if (gameStateManager.is(GameState.LOAD_GAME)) {
+                	loadGameScreen.mouseClicked(e); // pass the original MouseEvent
                 }
             }
         });
@@ -165,14 +183,23 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
         canvas.addMouseMotionListener(new MouseMotionAdapter() {
             @Override
             public void mouseMoved(MouseEvent e) {
-                if (gameStateManager.is(GameState.MAIN_MENU)) {
-                    Point p = translateMousePoint(e.getPoint());
+                Point p = translateMousePoint(e.getPoint());
+
+            	if (gameStateManager.is(GameState.MAIN_MENU)) {
                     mainMenu.mouseMoved(new MouseEvent(
                         e.getComponent(), e.getID(), e.getWhen(), e.getModifiersEx(), p.x, p.y, e.getClickCount(), e.isPopupTrigger()
                     ));
+                } else if (gameStateManager.is(GameState.NEW_GAME)) {
+                    newGameScreen.mouseMoved(p);
+                }  else if (gameStateManager.is(GameState.LOAD_GAME)) {
+                	loadGameScreen.mouseClicked(e); // pass the original MouseEvent
                 }
-            }
+            } 
         });
+    }
+    
+    public void setPendingSaveName(String name) {
+        this.pendingSaveName = name;
     }
 
     public synchronized void start() {
@@ -182,6 +209,10 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
     
     public GameStateManager getGameStateManager() {
         return gameStateManager;
+    }
+    
+    public Player getPlayer() {
+        return player;
     }
 
     public synchronized void stop() {
@@ -299,6 +330,11 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
         // ✅ Adicione aqui:
         if (gameStateManager.is(GameState.NEW_GAME)) {
             newGameScreen.tick(deltaTime);
+        }
+        
+        if (gameStateManager.is(GameState.LOAD_GAME)) {
+            // If your LoadGameScreen needs a tick/update in future, add here
+            // loadGameScreen.tick(deltaTime); ← optional
         }
         
         
@@ -431,6 +467,9 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
             case NEW_GAME:
                 newGameScreen.render(g);
                 break;
+            case LOAD_GAME:
+                loadGameScreen.render(g);
+                break;
         }
 
         g.dispose();
@@ -469,6 +508,8 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
         // Draw fade overlay (if active)
         gFinal.setColor(new Color(0, 0, 0, overlayAlpha));
         gFinal.fillRect(0, 0, screenW, screenH);
+        
+        savePopup.render(gFinal, canvas.getWidth(), canvas.getHeight());
 
         gFinal.dispose();
         bs.show();
@@ -578,6 +619,11 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
             newGameScreen.keyPressed(e);
             return;
         }
+        
+        if (gameStateManager.is(GameState.LOAD_GAME)) {
+            loadGameScreen.keyPressed(e);
+            return;
+        }
     }
 
     @Override
@@ -673,9 +719,29 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
     @Override
     public void onStartGame() {
         gameStateManager.setState(GameState.PLAYING);
+
+        if (pendingSaveName != null && player != null) {
+            int slotToUse = getNextAvailableSlot();
+            Position pos = player.getPosition();
+            SaveData data = new SaveData(pendingSaveName, pos.getX(), pos.getY());
+            saveManager.saveToSlot(slotToUse, data);
+
+            // ✅ Set message and timestamp
+            savePopup.show("Saved to Slot " + slotToUse);
+
+            pendingSaveName = null;
+        }
+
         System.out.println("Game Started!");
     }
-
+    
+    private int getNextAvailableSlot() {
+        for (int i = 1; i <= 3; i++) {
+            if (!saveManager.hasSave(i)) return i;
+        }
+        return 1; // If all slots are full, overwrite Slot 1
+    }
+    
     @Override
     public void onOptions() {
         System.out.println("Options clicked! (not implemented yet)");
@@ -692,10 +758,11 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
         gameStateManager.setState(GameState.NEW_GAME);
     }
     
-	@Override
-	public void onLoadGame() {
-	    System.out.println("Showing save slots... (not implemented)");		
-	}
+    @Override
+    public void onLoadGame() {
+        loadGameScreen.refreshSlots();
+        gameStateManager.setState(GameState.LOAD_GAME);
+    }
 
 	@Override
 	public void onBack() {
