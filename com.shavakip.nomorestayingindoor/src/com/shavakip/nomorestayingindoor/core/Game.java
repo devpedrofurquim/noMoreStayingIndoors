@@ -207,6 +207,8 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
                     newGameScreen.mouseClicked(p);
                 }  else if (gameStateManager.is(GameState.LOAD_GAME)) {
                 	loadGameScreen.mouseClicked(e); // pass the original MouseEvent
+                } else if (gameStateManager.is(GameState.PAUSED)) {
+                    pauseScreen.mouseClicked(adjustMouseEvent(e, p), Game.this);
                 }
             }
         });
@@ -224,6 +226,8 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
                     newGameScreen.mouseMoved(p);
                 }  else if (gameStateManager.is(GameState.LOAD_GAME)) {
                 	loadGameScreen.mouseClicked(e); // pass the original MouseEvent
+                } else if (gameStateManager.is(GameState.PAUSED)) {
+                    pauseScreen.mouseMoved(adjustMouseEvent(e, p));
                 }
             } 
         });
@@ -449,8 +453,10 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
 
         // 1. Render the game world into the internal buffer.
         Graphics2D g = image.createGraphics();
-        g.setColor(Color.PINK);
-        g.fillRect(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT);
+        if (!gameStateManager.is(GameState.PAUSED)) {
+            g.setColor(Color.PINK);
+            g.fillRect(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT);
+        }
         
         if (showingCredits) {
             long elapsed = System.currentTimeMillis() - creditsStartTime;
@@ -497,7 +503,7 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
                 break;
 
             case PAUSED:
-            	pauseScreen.render(g);
+                pauseScreen.render(g);
                 break;
 
             case GAME_OVER:
@@ -611,6 +617,12 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
         
         if (key == KeyEvent.VK_F11)
             setFullscreen(!fullscreen);
+        
+        // Handle PAUSE MENU input first
+        if (gameStateManager.is(GameState.PAUSED)) {
+            pauseScreen.keyPressed(e, this);
+            return; // 🔁 Return early so other states aren't processed
+        }
 
         // ===== MAIN MENU =====
         if (gameStateManager.is(GameState.MAIN_MENU)) {
@@ -656,13 +668,66 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
             if (key == KeyEvent.VK_D || key == KeyEvent.VK_RIGHT)
                 rightPressed = true;
 
-            if (key == KeyEvent.VK_P) {
-                gameStateManager.setState(GameState.PAUSED); // Toggle pause
-                pauseScreen.resetFade();
-            }
+            if (key == KeyEvent.VK_P || key == KeyEvent.VK_ESCAPE) {
+                if (gameStateManager.is(GameState.PLAYING)) {
+                    // 🟢 Create snapshot at *actual screen size*
+                    int screenW = canvas.getWidth();
+                    int screenH = canvas.getHeight();
+                    BufferedImage snapshot = new BufferedImage(screenW, screenH, BufferedImage.TYPE_INT_ARGB);
+                    Graphics2D gSnapshot = snapshot.createGraphics();
 
-            if (key == KeyEvent.VK_ESCAPE)
-                System.exit(0);
+                    // Same rendering hints as final output
+                    gSnapshot.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
+                    gSnapshot.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_SPEED);
+                    gSnapshot.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
+
+                    // Fill black background
+                    gSnapshot.setColor(Color.BLACK);
+                    gSnapshot.fillRect(0, 0, screenW, screenH);
+
+                    // 🟢 Scale the internal buffer as done in render()
+                    double scaleX = screenW / (double) INTERNAL_WIDTH;
+                    double scaleY = screenH / (double) INTERNAL_HEIGHT;
+                    double scale = Math.min(scaleX, scaleY);
+
+                    int finalW = (int) (INTERNAL_WIDTH * scale);
+                    int finalH = (int) (INTERNAL_HEIGHT * scale);
+                    int xOffset = (screenW - finalW) / 2;
+                    int yOffset = (screenH - finalH) / 2;
+
+                    // First render the internal world buffer
+                    BufferedImage worldImage = new BufferedImage(INTERNAL_WIDTH, INTERNAL_HEIGHT, BufferedImage.TYPE_INT_RGB);
+                    Graphics2D gWorld = worldImage.createGraphics();
+
+                    // Your world rendering logic at INTERNAL resolution
+                    gWorld.setColor(Color.PINK);
+                    gWorld.fillRect(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT);
+
+                    Position camPos = camera.getPosition();
+                    gWorld.scale(camera.getZoom(), camera.getZoom());
+                    gWorld.translate(-camPos.getX(), -camPos.getY());
+
+                    // Grid
+                    int gridSize = 16;
+                    gWorld.setColor(new Color(255, 255, 255, 40));
+                    for (int x = 0; x <= forestBounds.getMaxX(); x += gridSize)
+                        gWorld.drawLine(x, 0, x, (int) forestBounds.getMaxY());
+                    for (int y = 0; y <= forestBounds.getMaxY(); y += gridSize)
+                        gWorld.drawLine(0, y, (int) forestBounds.getMaxX(), y);
+
+                    // Player
+                    player.render(gWorld);
+                    gWorld.dispose();
+
+                    // 🟢 Draw world image scaled onto snapshot
+                    gSnapshot.drawImage(worldImage, xOffset, yOffset, finalW, finalH, null);
+                    gSnapshot.dispose();
+
+                    pauseScreen.setBackgroundSnapshot(snapshot);
+                    gameStateManager.setState(GameState.PAUSED);
+                    pauseScreen.resetFade();
+                }
+            }
 
             if (key == KeyEvent.VK_1) camera.shakeLight();
             if (key == KeyEvent.VK_2) camera.shakeDefault();
@@ -701,6 +766,32 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
             loadGameScreen.keyPressed(e);
             return;
         }
+    }
+    
+    private void renderGameToSnapshot(Graphics2D g) {
+        Position camPos = camera.getPosition();
+        g.scale(camera.getZoom(), camera.getZoom());
+        g.translate(-camPos.getX(), -camPos.getY());
+
+        // Background
+        g.setColor(Color.PINK);
+        g.fillRect(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT);
+
+        // Grid
+        int gridSize = 16;
+        g.setColor(new Color(255, 255, 255, 40));
+        int startX = (int) (Math.max(camPos.getX(), forestBounds.getMinX()) - (camPos.getX() % gridSize)) - gridSize;
+        int endX = (int) (Math.min(camPos.getX() + INTERNAL_WIDTH, forestBounds.getMaxX())) + gridSize;
+        int startY = (int) (Math.max(camPos.getY(), forestBounds.getMinY()) - (camPos.getY() % gridSize)) - gridSize;
+        int endY = (int) (Math.min(camPos.getY() + INTERNAL_HEIGHT, forestBounds.getMaxY())) + gridSize;
+
+        for (int x = startX; x <= endX; x += gridSize)
+            g.drawLine(x, startY, x, endY);
+        for (int y = startY; y <= endY; y += gridSize)
+            g.drawLine(startX, y, endX, y);
+
+        // Player
+        player.render(g);
     }
 
     @Override
