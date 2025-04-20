@@ -1,16 +1,43 @@
-package com.shavakip.nomorestayingindoor;
+package com.shavakip.nomorestayingindoor.core;
 
-import javax.swing.*;
-import java.awt.*;
+import java.awt.Canvas;
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.FontFormatException;
+import java.awt.FontMetrics;
+import java.awt.Graphics2D;
+import java.awt.GraphicsDevice;
+import java.awt.GraphicsEnvironment;
+import java.awt.Point;
+import java.awt.RenderingHints;
+import java.awt.Toolkit;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseMotionAdapter;
-import java.awt.geom.AffineTransform;
 import java.awt.image.BufferStrategy;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+
+import javax.swing.JFrame;
+import javax.swing.SwingUtilities;
+
+import com.shavakip.nomorestayingindoor.entity.Player;
+import com.shavakip.nomorestayingindoor.graphics.BitmapFont;
+import com.shavakip.nomorestayingindoor.save.SaveData;
+import com.shavakip.nomorestayingindoor.save.SaveManager;
+import com.shavakip.nomorestayingindoor.save.SaveUtils;
+import com.shavakip.nomorestayingindoor.ui.CreditsScreen;
+import com.shavakip.nomorestayingindoor.ui.GameOverScreen;
+import com.shavakip.nomorestayingindoor.ui.LoadGameScreen;
+import com.shavakip.nomorestayingindoor.ui.MainMenu;
+import com.shavakip.nomorestayingindoor.ui.NewGameScreen;
+import com.shavakip.nomorestayingindoor.ui.PauseScreen;
+import com.shavakip.nomorestayingindoor.ui.SavePopup;
+import com.shavakip.nomorestayingindoor.world.Camera;
+import com.shavakip.nomorestayingindoor.world.MapBounds;
+import com.shavakip.nomorestayingindoor.world.Position;
 
 public class Game implements Runnable, KeyListener, MenuActionListener {
 
@@ -25,6 +52,8 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
     private MapBounds forestBounds;
     private float overlayAlpha = 0.0f;
     private String pendingSaveName = null;
+    
+    private int currentSaveSlot = -1; // -1 means no save loaded
 
     
     public SaveManager saveManager;
@@ -83,6 +112,8 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
     private LoadGameScreen loadGameScreen;
     
     private Camera camera;
+    
+    private int storyProgress = 98;
 
     private volatile boolean safeToRender = true;
 
@@ -224,6 +255,14 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
             e.getComponent(), e.getID(), e.getWhen(), e.getModifiersEx(),
             p.x, p.y, e.getClickCount(), e.isPopupTrigger()
         );
+    }
+    
+    public void setCurrentSaveSlot(int slot) {
+        this.currentSaveSlot = slot;
+    }
+
+    public int getCurrentSaveSlot() {
+        return currentSaveSlot;
     }
 
     /**
@@ -514,6 +553,14 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
         gFinal.dispose();
         bs.show();
     }
+    
+    public int getStoryProgress() {
+        return storyProgress;
+    }
+
+    public void setStoryProgress(int progress) {
+        this.storyProgress = progress;
+    }
 
 
 
@@ -530,7 +577,33 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
         if (rightPressed) vx += 2;
         player.setVelocity(vx, vy);
     }
+    
+    public void quickSave(String flagKey, String flagValue) {
+        int slot = getCurrentSaveSlot();
+        if (slot == -1) {
+            System.out.println("No active slot to save.");
+            return;
+        }
 
+        Position pos = player.getPosition();
+        SaveData data = saveManager.loadFromSlot(slot);
+        if (data == null) {
+            System.out.println("Could not load data for slot " + slot);
+            return;
+        }
+
+        data.setChoice(flagKey, flagValue);
+        data.storyProgress = storyProgress; // assumes storyProgress is tracked in Game
+        data.playerX = pos.getX();
+        data.playerY = pos.getY();
+
+        saveManager.saveToSlot(slot, data);
+
+        int percent = SaveUtils.calculateProgressPercentage(storyProgress);
+        savePopup.show("Progress Saved: " + percent + "%");
+        System.out.println("Saved to slot " + slot + " — " + percent + "% complete");
+    }
+    
     @Override
     public void keyPressed(KeyEvent e) {
         int key = e.getKeyCode();
@@ -610,6 +683,10 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
             if (key == KeyEvent.VK_R) {
                 gameStateManager.setState(GameState.MAIN_MENU);
                 mainMenu.resetFade();
+            }
+            
+            if (key == KeyEvent.VK_J) {
+                quickSave("pressed_J", "true");
             }
             
             updatePlayerVelocity();
@@ -721,10 +798,12 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
         gameStateManager.setState(GameState.PLAYING);
 
         if (pendingSaveName != null && player != null) {
-            int slotToUse = getNextAvailableSlot();
-            Position pos = player.getPosition();
-            SaveData data = new SaveData(pendingSaveName, pos.getX(), pos.getY());
-            saveManager.saveToSlot(slotToUse, data);
+        	int slotToUse = getNextAvailableSlot();
+        	setCurrentSaveSlot(slotToUse); // ✅ Track it!
+
+        	Position pos = player.getPosition();
+        	SaveData data = new SaveData(pendingSaveName, pos.getX(), pos.getY());
+        	saveManager.saveToSlot(slotToUse, data);
 
             // ✅ Set message and timestamp
             savePopup.show("Saved to Slot " + slotToUse);

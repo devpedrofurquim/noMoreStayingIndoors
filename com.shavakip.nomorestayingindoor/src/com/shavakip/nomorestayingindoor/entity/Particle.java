@@ -1,4 +1,4 @@
-package com.shavakip.nomorestayingindoor;
+package com.shavakip.nomorestayingindoor.entity;
 
 import java.awt.*;
 import java.awt.image.BufferedImage;

@@ -1,6 +1,9 @@
-package com.shavakip.nomorestayingindoor;
+package com.shavakip.nomorestayingindoor.entity;
 
 import java.awt.Graphics;
+
+import com.shavakip.nomorestayingindoor.world.Camera;
+import com.shavakip.nomorestayingindoor.world.Position;
 
 public abstract class GameObject {
 	protected Position position;

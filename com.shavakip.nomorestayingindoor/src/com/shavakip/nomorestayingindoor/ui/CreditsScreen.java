@@ -1,8 +1,10 @@
-package com.shavakip.nomorestayingindoor;
+package com.shavakip.nomorestayingindoor.ui;
 
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+
+import com.shavakip.nomorestayingindoor.graphics.BitmapFont;
 
 public class CreditsScreen {
 

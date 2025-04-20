@@ -1,4 +1,4 @@
-package com.shavakip.nomorestayingindoor;
+package com.shavakip.nomorestayingindoor.core;
 
 public interface MenuActionListener {
     void onStartGame();

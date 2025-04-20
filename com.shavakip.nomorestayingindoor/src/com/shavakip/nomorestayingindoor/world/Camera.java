@@ -1,6 +1,9 @@
-package com.shavakip.nomorestayingindoor;
+package com.shavakip.nomorestayingindoor.world;
 
 import java.util.Optional;
+
+import com.shavakip.nomorestayingindoor.core.Size;
+import com.shavakip.nomorestayingindoor.entity.GameObject;
 
 public class Camera {
     private Position position;

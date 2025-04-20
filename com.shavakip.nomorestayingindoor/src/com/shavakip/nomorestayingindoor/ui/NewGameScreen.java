@@ -1,7 +1,11 @@
-package com.shavakip.nomorestayingindoor;
+package com.shavakip.nomorestayingindoor.ui;
 
 import java.awt.*;
 import java.awt.event.KeyEvent;
+
+import com.shavakip.nomorestayingindoor.core.Game;
+import com.shavakip.nomorestayingindoor.core.GameState;
+import com.shavakip.nomorestayingindoor.graphics.BitmapFont;
 
 public class NewGameScreen {
     private StringBuilder saveName = new StringBuilder();

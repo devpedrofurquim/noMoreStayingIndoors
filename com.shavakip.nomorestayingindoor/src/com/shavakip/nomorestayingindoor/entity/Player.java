@@ -1,12 +1,15 @@
-package com.shavakip.nomorestayingindoor;
+package com.shavakip.nomorestayingindoor.entity;
 
-import java.awt.*;
+import java.awt.Graphics;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
-import javax.imageio.ImageIO;
 import java.util.ArrayList;
 import java.util.Iterator;
+
+import javax.imageio.ImageIO;
+
+import com.shavakip.nomorestayingindoor.world.Position;
 
 public class Player extends GameObject {
     private float velocityX = 0;

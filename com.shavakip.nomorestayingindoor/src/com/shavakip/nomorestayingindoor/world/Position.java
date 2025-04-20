@@ -1,4 +1,4 @@
-package com.shavakip.nomorestayingindoor;
+package com.shavakip.nomorestayingindoor.world;
 
 public class Position {
 	public float x, y;

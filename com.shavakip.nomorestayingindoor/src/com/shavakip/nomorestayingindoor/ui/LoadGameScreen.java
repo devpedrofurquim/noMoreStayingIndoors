@@ -1,8 +1,15 @@
-package com.shavakip.nomorestayingindoor;
+package com.shavakip.nomorestayingindoor.ui;
 
 import java.awt.*;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
+
+import com.shavakip.nomorestayingindoor.core.Game;
+import com.shavakip.nomorestayingindoor.core.GameState;
+import com.shavakip.nomorestayingindoor.graphics.BitmapFont;
+import com.shavakip.nomorestayingindoor.save.SaveData;
+import com.shavakip.nomorestayingindoor.save.SaveUtils;
+import com.shavakip.nomorestayingindoor.world.Position;
 
 public class LoadGameScreen {
     private final BitmapFont font;
@@ -140,7 +147,9 @@ public class LoadGameScreen {
         for (int i = 0; i < 3; i++) {
             if (game.saveManager.hasSave(i + 1)) {
                 SaveData data = game.saveManager.loadFromSlot(i + 1);
-                slotButtons[i].setText("Slot " + (i + 1) + ": " + data.saveName);
+                int percent = SaveUtils.calculateProgressPercentage(data.storyProgress);
+                String label = data.saveName + " — " + percent + "%";
+                slotButtons[i].setText("Slot " + (i + 1) + ": " + label);
             } else {
                 slotButtons[i].setText("Slot " + (i + 1) + ": [Empty]");
             }
@@ -169,8 +178,10 @@ public class LoadGameScreen {
                     System.out.println("Deleted save slot " + (selectedSlot + 1));
                 }
             } else {
-                if (game.saveManager.hasSave(selectedSlot + 1)) {
-                    SaveData data = game.saveManager.loadFromSlot(selectedSlot + 1);
+                int slotToLoad = selectedSlot + 1;
+                if (game.saveManager.hasSave(slotToLoad)) {
+                    SaveData data = game.saveManager.loadFromSlot(slotToLoad);
+                    game.setCurrentSaveSlot(slotToLoad); // ✅ Track current slot
                     game.getPlayer().setPosition(new Position(data.playerX, data.playerY));
                     game.onStartGame();
                 } else {

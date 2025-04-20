@@ -1,4 +1,4 @@
-package com.shavakip.nomorestayingindoor;
+package com.shavakip.nomorestayingindoor.ui;
 
 import java.awt.*;
 import java.awt.event.KeyEvent;
@@ -6,6 +6,9 @@ import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
+
+import com.shavakip.nomorestayingindoor.core.MenuActionListener;
+import com.shavakip.nomorestayingindoor.graphics.BitmapFont;
 
 public class MainMenu {
     private final BitmapFont font;

@@ -1,6 +1,8 @@
-package com.shavakip.nomorestayingindoor;
+package com.shavakip.nomorestayingindoor.ui;
 
 import java.awt.*;
+
+import com.shavakip.nomorestayingindoor.graphics.BitmapFont;
 
 public class SavePopup {
     private final BitmapFont font;
