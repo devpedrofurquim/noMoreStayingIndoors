@@ -30,6 +30,7 @@ import com.shavakip.nomorestayingindoor.save.SaveManager;
 import com.shavakip.nomorestayingindoor.save.SaveUtils;
 import com.shavakip.nomorestayingindoor.ui.CreditsScreen;
 import com.shavakip.nomorestayingindoor.ui.GameOverScreen;
+import com.shavakip.nomorestayingindoor.ui.IntroScreen;
 import com.shavakip.nomorestayingindoor.ui.LoadGameScreen;
 import com.shavakip.nomorestayingindoor.ui.MainMenu;
 import com.shavakip.nomorestayingindoor.ui.NewGameScreen;
@@ -46,6 +47,8 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
     public static final int WIDTH = 320;   // not used for rendering here but for title info etc.
     public static final int HEIGHT = 240;
     public static final String TITLE = "No More Staying Indoors";
+    
+    private IntroScreen introScreen;
 
     private Canvas canvas;
     private Player player;
@@ -54,7 +57,6 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
     private String pendingSaveName = null;
     
     private int currentSaveSlot = -1; // -1 means no save loaded
-
     
     public SaveManager saveManager;
     
@@ -113,7 +115,7 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
     
     private Camera camera;
     
-    private int storyProgress = 98;
+    private int storyProgress = 78;
 
     private volatile boolean safeToRender = true;
 
@@ -429,6 +431,10 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
         if (gameStateManager.is(GameState.GAME_OVER)) {
             gameOverScreen.update();
         }
+        
+        if (gameStateManager.is(GameState.INTRO)) {
+            introScreen.update();
+        }
     }
     
     public void requestRender() {
@@ -515,6 +521,9 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
             case LOAD_GAME:
                 loadGameScreen.render(g);
                 break;
+            case INTRO:
+                introScreen.render(g);
+                break;
         }
 
         g.dispose();
@@ -568,7 +577,10 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
         this.storyProgress = progress;
     }
 
-
+    public void startIntro(String saveName) {
+        introScreen = new IntroScreen(this, menuFont, INTERNAL_WIDTH, INTERNAL_HEIGHT, saveName);
+        gameStateManager.setState(GameState.INTRO);
+    }
 
     public static void main(String[] args) {
         Game game = new Game();
@@ -766,6 +778,11 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
             loadGameScreen.keyPressed(e);
             return;
         }
+        
+        if (gameStateManager.is(GameState.INTRO)) {
+            introScreen.keyPressed(e.getKeyCode());
+            return;
+        }
     }
     
     private void renderGameToSnapshot(Graphics2D g) {
@@ -810,6 +827,11 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
             leftPressed = false;
         if (key == KeyEvent.VK_D || key == KeyEvent.VK_RIGHT)
             rightPressed = false;
+        
+        if (gameStateManager.is(GameState.INTRO)) {
+            introScreen.keyReleased(e.getKeyCode());
+            return;
+        }
         updatePlayerVelocity();
     }
 

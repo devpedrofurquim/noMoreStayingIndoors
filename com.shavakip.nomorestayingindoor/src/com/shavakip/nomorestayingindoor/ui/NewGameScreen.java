@@ -161,7 +161,7 @@ public class NewGameScreen {
         }
 
         game.setPendingSaveName(trimmedName); // Store name temporarily
-        game.onStartGame(); // Actual save happens after game begins
+        game.startIntro(saveName.toString());
     }
     
     private void updateButtonSelection() {
