@@ -23,7 +23,10 @@ import java.io.IOException;
 import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
 
+import com.shavakip.nomorestayingindoor.entity.Flower;
+import com.shavakip.nomorestayingindoor.entity.Npc;
 import com.shavakip.nomorestayingindoor.entity.Player;
+import com.shavakip.nomorestayingindoor.entity.Tree;
 import com.shavakip.nomorestayingindoor.graphics.BitmapFont;
 import com.shavakip.nomorestayingindoor.save.SaveData;
 import com.shavakip.nomorestayingindoor.save.SaveManager;
@@ -42,6 +45,7 @@ import com.shavakip.nomorestayingindoor.world.GameMap;
 import com.shavakip.nomorestayingindoor.world.MapBounds;
 import com.shavakip.nomorestayingindoor.world.MapManager;
 import com.shavakip.nomorestayingindoor.world.Position;
+import com.shavakip.nomorestayingindoor.world.TileMap;
 
 public class Game implements Runnable, KeyListener, MenuActionListener {
 
@@ -132,6 +136,9 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
         // Get system graphics device (for fullscreen mode) and screen size.
         graphicsDevice = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
         Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
+        
+        // Map Manager
+        mapManager = new MapManager();
 
         // Create canvas.
         // Initially, we set its preferred size to our internal resolution. 
@@ -144,12 +151,103 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
         };
         canvas.setFocusable(true);
         canvas.setIgnoreRepaint(true);
+        
+     // FOREST
+        String[] forestLayout = {
+        	    "########################################",
+        	    "#..t.....n....t...........t....t.......#",
+        	    "#..T........t.T...........T....T.......#",
+        	    "#..r........T.T......t....T....T.......#",
+        	    "#...........t.t......T.........t.......#",
+        	    "#...........T.T................T.......#",
+        	    "#.............t......t.............n....#",
+        	    "#.............T......T..................#",
+        	    "#.....t.................................#",
+        	    "#.....T...............r.................#",
+        	    "#...........t........t......t...........#",
+        	    "#...........T........T......T...........#",
+        	    "#......t....t...............t...........#",
+        	    "#......T....T...............T...........#",
+        	    "#......t......t....t..........t.........#",
+        	    "#......T......T....T..........T.........#",
+        	    "#.............t....t..........t.........#",
+        	    "#.............T....T..........T.........#",
+        	    "#.............t.....................L...#",
+        	    "#.............T.........................#",
+        	    "########################################"
+        	};
+        
+        int forestWidth = forestLayout[0].length() * TileMap.TILE_SIZE;
+        int forestHeight = forestLayout.length * TileMap.TILE_SIZE;
+        GameMap forest = new GameMap("forest", new MapBounds(0, 0, forestWidth, forestHeight));
+
+        TileMap forestTileMap = new TileMap(forestLayout);
+        forest.setTileMap(forestTileMap);
+        populateObjectsFromTileMap(forest, forestTileMap);
+
+        // LAKE
+        String[] lakeLayout = {
+        	    "########################################",
+        	    "#..........~~~~~~~.....................#",
+        	    "#..F......~~~~~~~~~..................C.#",
+        	    "#..........~~~~~~~~~...................#",
+        	    "#.............~~~~~....................#",
+        	    "#.........................~............#",
+        	    "#.....................~~~~~~~..........#",
+        	    "#.............~~~~~....................#",
+        	    "#..........~~~~~~~~~...................#",
+        	    "#..........~~~~~~~~~...................#",
+        	    "#..........~~~~~~~.....................#",
+        	    "#......................................#",
+        	    "#......................................#",
+        	    "########################################"
+        	};
+
+
+		int lakeWidth = lakeLayout[0].length() * TileMap.TILE_SIZE;
+		int lakeHeight = lakeLayout.length * TileMap.TILE_SIZE;
+		
+		GameMap lake = new GameMap("lake", new MapBounds(0, 0, lakeWidth, lakeHeight));
+        TileMap lakeTileMap = new TileMap(lakeLayout);
+        lake.setTileMap(lakeTileMap);
+        populateObjectsFromTileMap(lake, lakeTileMap);
+
+        // CEMETERY
+        String[] cemeteryLayout = {
+        	    "########################################",
+        	    "#L........††††††.......................#",
+        	    "#..†††..........†††....................#",
+        	    "#.....†††..................†††.........#",
+        	    "#...............††††...................#",
+        	    "#....................††................#",
+        	    "#.....††††††.................†††††.....#",
+        	    "#....................†††...............#",
+        	    "#..†††..........†††....................#",
+        	    "#...............†††††..................#",
+        	    "#...............††††...................#",
+        	    "#......................................#",
+        	    "########################################"
+        	};
+        int cemeteryWidth = cemeteryLayout[0].length() * TileMap.TILE_SIZE;
+        int cemeteryHeight = cemeteryLayout.length * TileMap.TILE_SIZE;
+
+        GameMap cemetery = new GameMap("cemetery", new MapBounds(0, 0, cemeteryWidth, cemeteryHeight));
+        TileMap cemeteryTileMap = new TileMap(cemeteryLayout);
+        cemetery.setTileMap(cemeteryTileMap);
+        populateObjectsFromTileMap(cemetery, cemeteryTileMap);
+
+        // Register all maps
+        mapManager.addMap(forest);
+        mapManager.addMap(lake);
+        mapManager.addMap(cemetery);
+
+        // Set the starting map
+        mapManager.setCurrentMap("forest");
 
         frame = new JFrame(TITLE);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setUndecorated(true); // no window borders
         frame.setResizable(true);
-        // testasd
         
         menuFadeStartTime = System.currentTimeMillis();
         menuAlpha = 0.0f;
@@ -176,27 +274,6 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
 			e.printStackTrace();
 		}
         
-        // Map Manager
-        mapManager = new MapManager();
-        
-        GameMap forest = new GameMap("forest", new MapBounds(0, 0, 512, 512));
-        GameMap lake = new GameMap("lake", new MapBounds(0, 0, 512, 512));
-        GameMap cemetery = new GameMap("cemetery", new MapBounds(0, 0, 512, 512));
-        
-     // forest ↔ lake
-        forest.addDoor(  new Door(496, 250, 16, 32, "lake",    16, 250));
-        lake.addDoor(    new Door(0,   250, 16, 32, "forest", 496, 250));
-
-        // lake ↔ cemetery
-        lake.addDoor(    new Door(496, 250, 16, 32, "cemetery", 16, 250));
-        cemetery.addDoor(new Door(0,   250, 16, 32, "lake",    496, 250));
-        
-        mapManager.addMap(forest);
-        mapManager.addMap(lake);
-        mapManager.addMap(cemetery);
-        
-        mapManager.setCurrentMap("forest");
-
         
         saveManager = new SaveManager();
         
@@ -211,9 +288,7 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
         loadGameScreen = new LoadGameScreen(menuFont, INTERNAL_WIDTH, INTERNAL_HEIGHT, this);
         
         savePopup = new SavePopup(menuFont); // scaled size
-        
-        // Create forest bounds (for example, a 800x600 area)
-        forestBounds = new MapBounds(0, 0, 512, 512);
+       
         
         camera = new Camera(new Size(INTERNAL_WIDTH, INTERNAL_HEIGHT), forest.getBounds());
                 
@@ -297,6 +372,51 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
 
     public int getCurrentSaveSlot() {
         return currentSaveSlot;
+    }
+    
+    private void populateObjectsFromTileMap(GameMap map, TileMap tileMap) {
+        char[][] layout = tileMap.getLayout();
+        float startX = map.getBounds().getMinX();
+        float startY = map.getBounds().getMinY();
+
+        for (int y = 0; y < layout.length; y++) {
+            for (int x = 0; x < layout[y].length; x++) {
+                char tile = layout[y][x];
+                float worldX = startX + x * 16;
+                float worldY = startY + y * 16;
+
+                switch (tile) {
+                    case 't':
+                        // Only place a tall tree if there is a 'T' trunk directly below
+                        if (y + 1 < layout.length && layout[y + 1][x] == 'T') {
+                            map.addObject(new Tree(new Position(worldX, worldY))); // Tree top at (x, y)
+                            layout[y][x] = '.';     // Clear top
+                            layout[y + 1][x] = '.'; // Clear trunk
+                        }
+                        break;
+                    case 'n':
+                        map.addObject(new Npc(new Position(worldX, worldY)));
+                        layout[y][x] = '.';
+                        break;
+                    case 'f':
+                        map.addObject(new Flower(new Position(worldX, worldY)));
+                        layout[y][x] = '.';
+                        break;
+                    case 'L':
+                        map.addDoor(new Door((int)worldX, (int)worldY, TileMap.TILE_SIZE, TileMap.TILE_SIZE, "lake", 2 * TileMap.TILE_SIZE, 2 * TileMap.TILE_SIZE));
+                        layout[y][x] = '.';
+                        break;
+                    case 'F':
+                        map.addDoor(new Door((int)worldX, (int)worldY, TileMap.TILE_SIZE, TileMap.TILE_SIZE, "forest", 7 * TileMap.TILE_SIZE, 3 * TileMap.TILE_SIZE));
+                        layout[y][x] = '.';
+                        break;
+                    case 'C':
+                        map.addDoor(new Door((int)worldX, (int)worldY, TileMap.TILE_SIZE, TileMap.TILE_SIZE, "cemetery", 1 * TileMap.TILE_SIZE, 1 * TileMap.TILE_SIZE));
+                        layout[y][x] = '.';
+                        break;
+                }
+            }
+        }
     }
 
     /**
@@ -516,7 +636,7 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
         // 1. Render the game world into the internal buffer.
         Graphics2D g = image.createGraphics();
         if (!gameStateManager.is(GameState.PAUSED)) {
-            g.setColor(Color.PINK);
+        	g.setColor(Color.BLACK);
             g.fillRect(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT);
         }
         
@@ -541,24 +661,25 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
                 g.translate(-camPos.getX(), -camPos.getY());
 
                 // ✅ Now render map in world space
-                mapManager.getCurrentMap().render(g);
+                mapManager.getCurrentMap().render(g, camera);
 
-                // Draw grid lines
-                int gridSize = 16;
-                g.setColor(new Color(255, 255, 255, 40));
-
-                int startX = (int) (Math.max(camPos.getX(), forestBounds.getMinX()) - (camPos.getX() % gridSize)) - gridSize;
-                int endX = (int) (Math.min(camPos.getX() + INTERNAL_WIDTH, forestBounds.getMaxX())) + gridSize;
-                int startU = (int) (Math.max(camPos.getY(), forestBounds.getMinY()) - (camPos.getY() % gridSize)) - gridSize;
-                int endY = (int) (Math.min(camPos.getY() + INTERNAL_HEIGHT, forestBounds.getMaxY())) + gridSize;
-
-                for (int x = startX; x <= endX; x += gridSize) {
-                    g.drawLine(x, startU, x, endY);
-                }
-
-                for (int y = startU; y <= endY; y += gridSize) {
-                    g.drawLine(startX, y, endX, y);
-                }
+//                // Draw grid lines
+//                int gridSize = 16;
+//                g.setColor(new Color(255, 255, 255, 40));
+//                MapBounds bounds = mapManager.getCurrentMap().getBounds();
+//
+//                int startX = (int) bounds.getMinX();
+//                int endX = (int) bounds.getMaxX();
+//                int startU = (int) bounds.getMinY();
+//                int endY = (int) bounds.getMaxY();
+//
+//                for (int x = startX; x <= endX; x += gridSize) {
+//                    g.drawLine(x, startU, x, endY);
+//                }
+//
+//                for (int y = startU; y <= endY; y += gridSize) {
+//                    g.drawLine(startX, y, endX, y);
+//                }
 
                 // Render player
                 player.render(g);
@@ -771,7 +892,7 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
                     Graphics2D gWorld = worldImage.createGraphics();
 
                     // Your world rendering logic at INTERNAL resolution
-                    gWorld.setColor(Color.PINK);
+                    gWorld.setColor(Color.BLACK);
                     gWorld.fillRect(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT);
 
                     Position camPos = camera.getPosition();
@@ -780,11 +901,11 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
 
                     // Grid
                     int gridSize = 16;
-                    gWorld.setColor(new Color(255, 255, 255, 40));
-                    for (int x = 0; x <= forestBounds.getMaxX(); x += gridSize)
-                        gWorld.drawLine(x, 0, x, (int) forestBounds.getMaxY());
-                    for (int y = 0; y <= forestBounds.getMaxY(); y += gridSize)
-                        gWorld.drawLine(0, y, (int) forestBounds.getMaxX(), y);
+                    MapBounds bounds = mapManager.getCurrentMap().getBounds();
+                    for (int x = 0; x <= bounds.getMaxX(); x += gridSize)
+                        gWorld.drawLine(x, 0, x, (int) bounds.getMaxY());
+                    for (int y = 0; y <= bounds.getMaxY(); y += gridSize)
+                        gWorld.drawLine(0, y, (int) bounds.getMaxX(), y);
 
                     // Player
                     player.render(gWorld);
@@ -850,7 +971,7 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
         g.translate(-camPos.getX(), -camPos.getY());
 
         // Background
-        g.setColor(Color.PINK);
+        g.setColor(Color.BLACK);
         g.fillRect(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT);
 
         // Grid
