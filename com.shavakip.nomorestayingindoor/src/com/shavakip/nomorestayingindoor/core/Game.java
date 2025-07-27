@@ -37,7 +37,10 @@ import com.shavakip.nomorestayingindoor.ui.NewGameScreen;
 import com.shavakip.nomorestayingindoor.ui.PauseScreen;
 import com.shavakip.nomorestayingindoor.ui.SavePopup;
 import com.shavakip.nomorestayingindoor.world.Camera;
+import com.shavakip.nomorestayingindoor.world.Door;
+import com.shavakip.nomorestayingindoor.world.GameMap;
 import com.shavakip.nomorestayingindoor.world.MapBounds;
+import com.shavakip.nomorestayingindoor.world.MapManager;
 import com.shavakip.nomorestayingindoor.world.Position;
 
 public class Game implements Runnable, KeyListener, MenuActionListener {
@@ -52,6 +55,8 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
 
     private Canvas canvas;
     private Player player;
+    private boolean justTeleported = false;
+    private int teleportCooldown = 0;
     private MapBounds forestBounds;
     private float overlayAlpha = 0.0f;
     private String pendingSaveName = null;
@@ -64,8 +69,9 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
     private final long CREDITS_FADE_DURATION = 1000;   // 1s fade in/out
     
     private CreditsScreen creditsScreen;
-
     
+    private MapManager mapManager;
+
     private boolean showingCredits = false;
     private long creditsStartTime = 0;
     private final long CREDITS_DURATION = 5000; // 5 seconds
@@ -170,6 +176,28 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
 			e.printStackTrace();
 		}
         
+        // Map Manager
+        mapManager = new MapManager();
+        
+        GameMap forest = new GameMap("forest", new MapBounds(0, 0, 512, 512));
+        GameMap lake = new GameMap("lake", new MapBounds(0, 0, 512, 512));
+        GameMap cemetery = new GameMap("cemetery", new MapBounds(0, 0, 512, 512));
+        
+     // forest ↔ lake
+        forest.addDoor(  new Door(496, 250, 16, 32, "lake",    16, 250));
+        lake.addDoor(    new Door(0,   250, 16, 32, "forest", 496, 250));
+
+        // lake ↔ cemetery
+        lake.addDoor(    new Door(496, 250, 16, 32, "cemetery", 16, 250));
+        cemetery.addDoor(new Door(0,   250, 16, 32, "lake",    496, 250));
+        
+        mapManager.addMap(forest);
+        mapManager.addMap(lake);
+        mapManager.addMap(cemetery);
+        
+        mapManager.setCurrentMap("forest");
+
+        
         saveManager = new SaveManager();
         
         mainMenu = new MainMenu(menuFont, INTERNAL_WIDTH, INTERNAL_HEIGHT);
@@ -187,7 +215,7 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
         // Create forest bounds (for example, a 800x600 area)
         forestBounds = new MapBounds(0, 0, 512, 512);
         
-        camera = new Camera(new Size(INTERNAL_WIDTH, INTERNAL_HEIGHT), forestBounds);
+        camera = new Camera(new Size(INTERNAL_WIDTH, INTERNAL_HEIGHT), forest.getBounds());
                 
         camera.focusOn(player);
 
@@ -407,19 +435,47 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
             return;
         }
         
+        
         if (gameStateManager.is(GameState.MAIN_MENU)) {
             mainMenu.update();
         }
 
         if (gameStateManager.is(GameState.PLAYING)) {
+        	if (teleportCooldown > 0) {
+        	    teleportCooldown--;
+        	} else {
+        	    justTeleported = false;
+        	}
+
+        	// Door transitions
+        	if (!justTeleported) {
+        	    for (Door door : mapManager.getCurrentMap().getDoors()) {
+        	        if (door.intersects(player.getPosition())) {
+        	            mapManager.setCurrentMap(door.getTargetMapId());
+        	            float offsetX = 0, offsetY = 0;
+        	         // Push player slightly away from door so it doesn't instantly re-enter
+        	            if (door.getTargetX() == 0) offsetX = 20; // coming from left
+        	            else if (door.getTargetX() + door.getWidth() >= mapManager.getCurrentMap().getBounds().getMaxX()) offsetX = -20; // right
+
+        	            player.setPosition(new Position(door.getTargetX() + offsetX, door.getTargetY() + offsetY));        	            camera = new Camera(new Size(INTERNAL_WIDTH, INTERNAL_HEIGHT), mapManager.getCurrentMap().getBounds());
+        	            camera.focusOn(player);
+
+        	            justTeleported = true;
+        	            teleportCooldown = 20; // ~0.3s delay (if 60 ticks/sec)
+        	            break;
+        	        }
+        	    }
+        	}
             updatePlayerVelocity();
             player.update(deltaTime);
 
             // Clamp player to map bounds
             Position playerPos = player.getPosition();
-            float clampedX = Math.max(forestBounds.getMinX(), Math.min(forestBounds.getMaxX() - 16, playerPos.getX()));
-            float clampedY = Math.max(forestBounds.getMinY(), Math.min(forestBounds.getMaxY() - 16, playerPos.getY()));
-            player.setPosition(new Position(clampedX, clampedY));
+            MapBounds bounds = mapManager.getCurrentMap().getBounds();
+            float clampedX = Math.max(bounds.getMinX(), Math.min(bounds.getMaxX() - 16, player.getPosition().getX()));
+            float clampedY = Math.max(bounds.getMinY(), Math.min(bounds.getMaxY() - 16, player.getPosition().getY()));
+            player.getPosition().setX(clampedX);
+            player.getPosition().setY(clampedY);
 
             camera.update();
         }
@@ -479,10 +535,13 @@ public class Game implements Runnable, KeyListener, MenuActionListener {
             mainMenu.render(g);
             break;
             case PLAYING:
-                // Translate and scale camera
+                // Translate and scale camera first
                 Position camPos = camera.getPosition();
                 g.scale(camera.getZoom(), camera.getZoom());
                 g.translate(-camPos.getX(), -camPos.getY());
+
+                // ✅ Now render map in world space
+                mapManager.getCurrentMap().render(g);
 
                 // Draw grid lines
                 int gridSize = 16;
